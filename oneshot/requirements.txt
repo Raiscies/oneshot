@@ -1,0 +1,32 @@
+# OneShot - 依赖列表
+# 一键直达文献：基于快捷键的论文文献快速下载工具
+
+# 核心框架
+nicegui>=1.4.0
+fastapi>=0.100.0
+
+# 网络请求
+httpx>=0.24.0
+aiohttp>=3.8.0
+
+# 系统交互
+pynput>=1.7.6        # 全局键盘监听
+pyperclip>=1.8.2     # 剪贴板操作
+pystray>=0.19.4      # 系统托盘
+Pillow>=9.5.0        # 图标处理
+
+# PDF处理
+PyPDF2>=3.0.0
+
+# 数据存储
+# sqlite3 (Python内置)
+
+# 学术搜索
+scholarly>=1.7.0
+
+# 可选：浏览器自动化（用于绕过反爬虫）
+# undetected-chromedriver>=3.1.0
+
+# 开发依赖
+# ruby (用于AnyStyle引用解析，需要单独安装)
+# anystyle-cli (Ruby gem: gem install anystyle-cli)
