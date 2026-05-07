@@ -1,7 +1,8 @@
 """
-OneShot - UI包初始化
+OneShot - UI 模块
 """
 
-from .app import OneShotUI, create_app
+from .main_window import MainWindow
+from .result_dialog import ResultDialog, Card
 
-__all__ = ["OneShotUI", "create_app"]
+__all__ = ["MainWindow", "ResultDialog", "Card"]

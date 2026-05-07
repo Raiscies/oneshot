@@ -1,0 +1,15 @@
+{
+    "hotkey": {
+        "modifiers": [
+            "ctrl"
+        ],
+        "key": "q"
+    },
+    "window": {
+        "always_on_top": true,
+        "follow_mouse": true
+    },
+    "storage": {
+        "path": ""
+    }
+}

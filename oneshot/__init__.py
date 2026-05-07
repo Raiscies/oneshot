@@ -12,7 +12,7 @@ from .services import (
     SearchService,
     DownloadService,
     KeyboardService,
-    ClipboardService,
+    SelectionService,
     TrayService,
 )
 
@@ -24,6 +24,6 @@ __all__ = [
     "SearchService",
     "DownloadService",
     "KeyboardService",
-    "ClipboardService",
+    "SelectionService",
     "TrayService",
 ]

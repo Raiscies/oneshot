@@ -2,9 +2,9 @@
 OneShot - 文献数据模型
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
-from typing import Optional
+from typing import Optional, get_type_hints
 from pathlib import Path
 
 
@@ -21,8 +21,11 @@ class Paper:
     # 来源信息
     journal: Optional[str] = None
     volume: Optional[str] = None
+    issue: Optional[str] = None
     pages: Optional[str] = None
     publisher: Optional[str] = None
+    url: Optional[str] = None
+    type_: Optional[str] = None  # 文献类型：article, book, inproceedings 等
     
     # 文件信息
     file_path: Optional[Path] = None
@@ -30,11 +33,14 @@ class Paper:
     
     # 元数据
     abstract: Optional[str] = None
+    tldr: Optional[str] = None  # 论文摘要的简短版本
     keywords: list[str] = field(default_factory=list)
     citations: int = 0  # 被引用次数
+    ccf_rank: Optional[str] = None  # CCF 等级：A/B/C/none
     
     # 原始数据
     raw_citation: Optional[str] = None  # 原始引用字符串
+    citation_number: Optional[int] = None  # 引用编号（如 [1] 中的 1）
     
     # 数据库字段
     id: Optional[int] = None
@@ -47,6 +53,39 @@ class Paper:
         """确保路径是Path对象"""
         if self.file_path and not isinstance(self.file_path, Path):
             self.file_path = Path(self.file_path)
+    
+    @staticmethod
+    def _is_empty(val, field_type) -> bool:
+        """判断字段是否为空"""
+        # int 类型默认值为 0
+        if field_type == int:
+            return val == 0
+        # list 类型默认值为 []
+        if field_type == list:
+            return not val
+        # 其他类型（str, datetime, Path 等）默认值为 None/空
+        return not val
+    
+    def merge(self, other: "Paper"):
+        """
+        从另一个 Paper 对象合并信息（保留已有值，只填充空值）
+        """
+        if not other:
+            return
+        
+        # 获取类型注解
+        hints = get_type_hints(Paper)
+        
+        for f in fields(self):
+            if f.name == 'title':  # title 是必填字段，跳过
+                continue
+            
+            self_val = getattr(self, f.name)
+            other_val = getattr(other, f.name)
+            
+            field_type = hints.get(f.name)
+            if self._is_empty(self_val, field_type) and not self._is_empty(other_val, field_type):
+                setattr(self, f.name, other_val)
     
     @property
     def display_authors(self) -> str:
@@ -74,26 +113,17 @@ class Paper:
     
     def to_dict(self) -> dict:
         """转换为字典"""
-        return {
-            "id": self.id,
-            "title": self.title,
-            "authors": self.authors,
-            "year": self.year,
-            "doi": self.doi,
-            "journal": self.journal,
-            "volume": self.volume,
-            "pages": self.pages,
-            "publisher": self.publisher,
-            "file_path": str(self.file_path) if self.file_path else None,
-            "abstract": self.abstract,
-            "keywords": self.keywords,
-            "citations": self.citations,
-            "raw_citation": self.raw_citation,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-            "downloaded": self.downloaded,
-            "file_size": self.file_size,
-        }
+        result = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            # 特殊处理
+            if f.name == 'file_path':
+                result[f.name] = str(val) if val else None
+            elif f.name in ('created_at', 'updated_at') and val:
+                result[f.name] = val.isoformat()
+            else:
+                result[f.name] = val
+        return result
     
     @classmethod
     def from_dict(cls, data: dict) -> "Paper":
@@ -116,7 +146,6 @@ class SearchResult:
     """搜索结果"""
     paper: Paper
     source: str  # 来源：CrossRef, SemanticScholar, GoogleScholar等
-    score: float = 1.0  # 匹配分数
     download_url: Optional[str] = None
     available: bool = True
     error: Optional[str] = None

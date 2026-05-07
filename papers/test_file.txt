@@ -1,0 +1,42 @@
+[1] Ittai Abraham, Daniel Delling, Andrew V. Goldberg, and Renato F. Werneck. 2011. A Hub-Based Labeling Algorithm
+for Shortest Paths in Road Networks. In Proceedings of the 10th International Conference on Experimental Algorithms.
+230–241.
+[2] Ittai Abraham, Daniel Delling, Andrew V. Goldberg, and Renato F. Werneck. 2012. Hierarchical Hub Labelings for
+Shortest Paths. In Proceedings of the 20th Annual European Conference on Algorithms. 24–35.
+[3] PTV AG. [n.d.]. Western europe dataset. http://www.ptv.de
+[4] Takuya Akiba, Yoichi Iwata, Ken-ichi Kawarabayashi, and Yuki Kawata. 2014. Fast shortest-path distance queries on
+road networks by pruned highway labeling. In 2014 Proceedings of the sixteenth workshop on algorithm engineering and
+experiments (ALENEX). 147–154.
+[5] Takuya Akiba, Yoichi Iwata, and Yuichi Yoshida. 2013. Fast exact shortest-path distance queries on large networks
+by pruned landmark labeling. In Praoceedings of the ACM SIGMOD International Conference on Management of Data.
+349–360.
+[6] Stefan Arnborg, asDerek G Corneil, and Andrzej Proskurowski. 1987. Complexity of finding embeddings in ak-tree.
+SIAM Journal on Algebraic Discrete Methods 8, 2 (1987), 277–284.
+[7] Maxim Babenko, Andrew V Goldberg, Haim Kaplan, Ruslan Savchenko, and MathiasWeller. 2015. On the complexity of
+hub labeling. In International Symposium on Mathematical Foundations of Computer Science: Mathematical Foundations
+of Computer Science (MFCS).
+[8] Michael A. Bender and Martín Farach-Colton. 2000. The LCA Problem Revisited. In LATIN 2000: Theoretical Informatics,
+Gaston H. Gonnet and Alfredo Viola (Eds.). Springer Berlin Heidelberg, 88–94.
+[9] Ivona Bezáková and Andrew Searns. 2018. On counting oracles for path problems. In 29th International Symposium on
+Algorithms and Computation (ISAAC 2018). Schloss-Dagstuhl-Leibniz Zentrum für Informatik.
+[10] Hans L Bodlaender. 2006. Treewidth: characterizations, applications, and computations. In 32nd International Workshop
+of Graph-Theoretic Concepts in Computer Science. 1–14.
+[11] Zitong Chen, Ada Wai-Chee Fu, Minhao Jiang, Eric Lo, and Pengfei Zhang. 2021. P2h: Efficient distance querying
+on road networks by projected vertex separators. In Proceedings of the ACM SIGMOD International Conference on
+Management of Data. 313–325.
+[12] Edith Cohen, Eran Halperin, Haim Kaplan, and Uri Zwick. 2003. Reachability and distance queries via 2-hop labels.
+SIAM J. Comput. 32, 5 (2003), 1338–1355.
+[13] Daniel Delling, Andrew V. Goldberg, Ilya P. Razenshteyn, and Renato Fonseca F. Werneck. 2011. Graph Partitioning
+with Natural Cuts. In 25th IEEE International Symposium on Parallel and Distributed Processing, IPDPS 2011, Anchorage,
+Alaska, USA, 16-20 May, 2011 - Conference Proceedings. IEEE, 1135–1146.
+[14] Camil Demetrescu, Andrew V Goldberg, and David S Johnson. 2009. The shortest path problem: Ninth DIMACS
+implementation challenge. Vol. 74. American Mathematical Soc.
+[15] Yingying Duan and Feng Lu. 2014. Robustness of city road networks at different granularities. Physica A: Statistical
+Mechanics and its Applications 411 (2014), 21–34.
+[16] Rawia Ahmed El-Rashidy and Susan Grant-Muller. 2016. The evaluation of redundancy for road traffic networks.
+Transport 31, 4 (2016), 427–439.
+[17] Muhammad Farhan, Henning Koehler, Robert Ohms, and Qing Wang. 2024. Hierarchical Cut Labelling–Scaling Up
+Distance Queries on Road Networks. In Proceedings of the ACM SIGMOD International Conference on Management of
+Data.
+[18] Uriel Feige and Mohammad Mahdian. 2006. Finding small balanced separators. In Proceedings of the 38th Annual ACM
+Symposium on Theory of Computing, Jon M. Kleinberg (Ed.). 375–384.

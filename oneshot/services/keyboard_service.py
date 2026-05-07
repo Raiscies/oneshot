@@ -1,13 +1,56 @@
 """
 OneShot - 全局快捷键监听服务
+使用 multiprocessing + keyboard 库实现全局快捷键监听
 """
 
 import logging
+import multiprocessing
+import time
+import threading
 from typing import Callable, Optional
-from threading import Thread, Event
-import asyncio
+
+import keyboard
 
 logger = logging.getLogger(__name__)
+
+
+def _keyboard_worker(pipe, stop_event, hotkey_str):
+    """
+    独立的键盘监听进程
+    
+    Args:
+        pipe: 与主进程通信的管道
+        stop_event: 停止信号事件
+        hotkey_str: 热键字符串，如 "ctrl+q"
+    """
+    logger.info(f"键盘监听进程启动，热键: {hotkey_str}")
+    
+    handler = None
+    
+    def on_hotkey():
+        """热键按下时的回调"""
+        logger.info("热键触发")
+        # 通过管道通知主进程
+        try:
+            pipe.send("trigger")
+        except Exception:
+            pass
+    
+    try:
+        # 注册热键
+        handler = keyboard.add_hotkey(hotkey_str, on_hotkey, suppress=True)
+        logger.info(f"热键已注册: {hotkey_str}")
+        
+        # 阻塞等待直到收到停止信号
+        stop_event.wait()
+    finally:
+        # 清理热键
+        if handler:
+            try:
+                keyboard.remove_hotkey(handler)
+            except Exception:
+                pass
+        logger.info("键盘监听进程已停止")
 
 
 class KeyboardService:
@@ -15,12 +58,13 @@ class KeyboardService:
     
     def __init__(self):
         """初始化键盘服务"""
-        self._running = False
-        self._thread: Optional[Thread] = None
-        self._stop_event = Event()
+        self._process: Optional[multiprocessing.Process] = None
+        self._pipe = None
+        self._stop_event = None
         self._callback: Optional[Callable] = None
         self._modifier_keys = set()
-        self._hotkey = ({"ctrl", "shift"}, "l")  # 默认 Ctrl+Shift+L
+        self._hotkey = ({"ctrl"}, "q")  # 默认 Ctrl+Q
+        self._hotkey_str = "ctrl+q"
     
     def set_hotkey(self, callback: Callable, modifier: set = None, key: str = None):
         """
@@ -32,183 +76,79 @@ class KeyboardService:
             key: 主键，如 'l', 's' 等
         """
         self._callback = callback
+        
         if modifier is not None:
             self._modifier_keys = modifier
         if key is not None:
             self._hotkey = (self._modifier_keys, key.lower())
         
-        logger.info(f"快捷键已设置: {'+'.join(sorted(self._hotkey[0]))}+{self._hotkey[1].upper()}")
-    
-    def start(self):
-        """启动键盘监听"""
-        if self._running:
-            logger.warning("键盘监听已在运行")
-            return
+        # 构建热键字符串
+        modifiers = sorted(self._hotkey[0])
+        key_char = self._hotkey[1]
+        self._hotkey_str = "+".join(modifiers + [key_char])
         
-        self._running = True
-        self._stop_event.clear()
-        self._thread = Thread(target=self._listen, daemon=True)
-        self._thread.start()
-        logger.info("键盘监听已启动")
+        # 停止旧进程
+        self.stop()
+        
+        # 启动新进程
+        self._start_worker()
+        
+        logger.info(f"快捷键已设置: {self._hotkey_str.upper()}")
+    
+    def _start_worker(self):
+        """启动键盘监听进程"""
+        # 创建管道用于进程间通信
+        self._pipe, child_pipe = multiprocessing.Pipe()
+        
+        # 创建停止事件
+        self._stop_event = multiprocessing.Event()
+        
+        # 启动独立进程
+        self._process = multiprocessing.Process(
+            target=_keyboard_worker,
+            args=(child_pipe, self._stop_event, self._hotkey_str)
+        )
+        self._process.daemon = True
+        self._process.start()
+        
+        # 启动管道监听线程
+        threading.Thread(target=self._listen_pipe, daemon=True).start()
+    
+    def _listen_pipe(self):
+        """监听管道，接收子进程消息"""
+        while self._process and self._process.is_alive():
+            try:
+                if self._pipe.poll(0.1):
+                    msg = self._pipe.recv()
+                    if msg == "trigger" and self._callback:
+                        self._callback()
+            except Exception:
+                break
     
     def stop(self):
         """停止键盘监听"""
-        if not self._running:
-            return
+        if self._stop_event:
+            self._stop_event.set()
         
-        self._running = False
-        self._stop_event.set()
+        if self._process:
+            try:
+                self._process.join(timeout=1)
+                if self._process.is_alive():
+                    self._process.terminate()
+            except Exception:
+                pass
+            self._process = None
         
-        if self._thread:
-            self._thread.join(timeout=2)
+        if self._pipe:
+            try:
+                self._pipe.close()
+            except Exception:
+                pass
+            self._pipe = None
         
-        logger.info("键盘监听已停止")
+        self._stop_event = None
+        logger.debug("KeyboardService 已停止")
     
-    def _listen(self):
-        """监听循环"""
-        try:
-            from pynput import keyboard
-        except ImportError:
-            logger.error("pynput未安装，请运行: pip install pynput")
-            self._running = False
-            return
-        
-        def on_press(key):
-            """按键按下处理"""
-            try:
-                # 获取当前修饰键状态
-                current_modifiers = set()
-                
-                if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
-                    current_modifiers.add("ctrl")
-                elif key in (keyboard.Key.shift_l, keyboard.Key.shift_r):
-                    current_modifiers.add("shift")
-                elif key in (keyboard.Key.alt_l, keyboard.Key.alt_r):
-                    current_modifiers.add("alt")
-                
-                # 检查是否是主键
-                try:
-                    key_char = key.char.lower()
-                except AttributeError:
-                    key_char = None
-                
-                # 检查是否匹配快捷键
-                expected_modifiers, expected_key = self._hotkey
-                
-                if key_char == expected_key:
-                    if current_modifiers == expected_modifiers or \
-                       (current_modifiers.issuperset(expected_modifiers) and 
-                        not current_modifiers - expected_modifiers):
-                        logger.info("检测到快捷键触发")
-                        if self._callback:
-                            # 在新线程中调用回调
-                            Thread(target=self._trigger_callback, daemon=True).start()
-                else:
-                    # 检查修饰键是否按下
-                    if "ctrl" in current_modifiers:
-                        self._modifier_keys.add("ctrl")
-                    if "shift" in current_modifiers:
-                        self._modifier_keys.add("shift")
-                    if "alt" in current_modifiers:
-                        self._modifier_keys.add("alt")
-                        
-            except Exception as e:
-                logger.error(f"按键处理错误: {e}")
-        
-        def on_release(key):
-            """按键释放处理"""
-            try:
-                try:
-                    key_char = key.char.lower()
-                except AttributeError:
-                    key_char = None
-                
-                # 释放修饰键
-                if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
-                    self._modifier_keys.discard("ctrl")
-                elif key in (keyboard.Key.shift_l, keyboard.Key.shift_r):
-                    self._modifier_keys.discard("shift")
-                elif key in (keyboard.Key.alt_l, keyboard.Key.alt_r):
-                    self._modifier_keys.discard("alt")
-                    
-            except Exception as e:
-                logger.error(f"按键释放处理错误: {e}")
-        
-        # 改进的监听逻辑
-        pressed_keys = set()
-        
-        def on_press_v2(key):
-            try:
-                key_name = None
-                is_modifier = False
-                
-                # 处理修饰键
-                if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
-                    pressed_keys.add("ctrl")
-                    is_modifier = True
-                elif key == keyboard.Key.shift_l or key == keyboard.Key.shift_r:
-                    pressed_keys.add("shift")
-                    is_modifier = True
-                elif key == keyboard.Key.alt_l or key == keyboard.Key.alt_r:
-                    pressed_keys.add("alt")
-                    is_modifier = True
-                
-                # 处理普通键
-                if not is_modifier:
-                    try:
-                        key_name = key.char.lower()
-                    except AttributeError:
-                        return
-                    
-                    pressed_keys.add(key_name)
-                    
-                    # 检查快捷键
-                    expected_modifiers, expected_key = self._hotkey
-                    
-                    if key_name == expected_key:
-                        if pressed_keys - {key_name} == expected_modifiers:
-                            logger.info("检测到快捷键触发")
-                            if self._callback:
-                                Thread(target=self._trigger_callback, daemon=True).start()
-                
-            except Exception as e:
-                logger.error(f"按键处理错误: {e}")
-        
-        def on_release_v2(key):
-            try:
-                if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
-                    pressed_keys.discard("ctrl")
-                elif key == keyboard.Key.shift_l or key == keyboard.Key.shift_r:
-                    pressed_keys.discard("shift")
-                elif key == keyboard.Key.alt_l or key == keyboard.Key.alt_r:
-                    pressed_keys.discard("alt")
-                else:
-                    try:
-                        pressed_keys.discard(key.char.lower())
-                    except AttributeError:
-                        pass
-            except Exception as e:
-                logger.error(f"按键释放处理错误: {e}")
-        
-        with keyboard.Listener(on_press=on_press_v2, on_release=on_release_v2) as listener:
-            while self._running and not self._stop_event.is_set():
-                self._stop_event.wait(timeout=0.5)
-            
-            listener.stop()
-    
-    def _trigger_callback(self):
-        """触发回调"""
-        try:
-            if self._callback:
-                if asyncio.iscoroutinefunction(self._callback):
-                    # 如果是异步函数，在新的事件循环中运行
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(self._callback())
-                    finally:
-                        loop.close()
-                else:
-                    self._callback()
-        except Exception as e:
-            logger.error(f"回调执行错误: {e}")
+    def remove_hotkey(self):
+        """移除快捷键（调用 stop）"""
+        self.stop()
