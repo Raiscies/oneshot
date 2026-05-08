@@ -18,8 +18,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# lib/
+# lib64/
 parts/
 sdist/
 var/
@@ -143,14 +143,6 @@ config.local.json
 # Atom
 .atom/
 
-# Eclipse
-.metadata/
-bin/
-tmp/
-*.bak
-*.swp
-*~
-
 # Visual Studio
 .vs/
 *.suo
@@ -184,15 +176,6 @@ $RECYCLE.BIN/
 
 
 # ===========================================
-# Rust (Tauri 项目如果添加)
-# ===========================================
-
-src-tauri/target/
-Cargo.lock
-*.rs.bk
-
-
-# ===========================================
 # Node (前端项目如果添加)
 # ===========================================
 
@@ -205,6 +188,3 @@ yarn-error.log*
 dist/
 dist-ssr/
 *.local
-
-# Editor directories and files
-.tauri/
