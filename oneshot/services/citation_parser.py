@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import re
+import tempfile
 from typing import Optional, Dict, List
 from pathlib import Path
 from datetime import datetime
@@ -262,13 +263,12 @@ class CitationParser:
         """
         try:
             # 将引用写入临时文件
-            import tempfile
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
                 f.write(citation)
                 temp_file = f.name
             
             try:
-                # 调用 AnyStyle 解析文件
+                # 调用 AnyStyle 解析文件（在文件关闭后调用）
                 if self.anystyle_path == "ruby -S anystyle":
                     cmd_parts = ["ruby", "-S", "anystyle", "--stdout", "-f", "csl", "parse", temp_file]
                 else:
@@ -278,7 +278,7 @@ class CitationParser:
                     cmd_parts,
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=20,
                     encoding='utf-8'
                 )
             finally:

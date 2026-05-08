@@ -2,7 +2,7 @@
 # 一键直达文献：基于快捷键的论文文献快速下载工具
 
 # UI框架
-customtkinter>=5.2.0
+# customtkinter>=5.2.0
 
 # 网络请求
 httpx>=0.24.0
@@ -13,9 +13,10 @@ keyboard>=0.13.5     # 全局键盘监听
 pyperclip>=1.8.2     # 剪贴板操作
 pywin32>=306         # Windows API 调用
 pywinauto>=0.6.8     # Windows UI 自动化
+pywebview>=6.2.1       # 内置浏览器显示文献详情
 
 pystray>=0.19.4      # 系统托盘
-Pillow>=9.5.0        # 图标处理
+# Pillow>=9.5.0        # 图标处理
 
 # # PDF处理
 # PyPDF2>=3.0.0
@@ -26,6 +27,9 @@ Pillow>=9.5.0        # 图标处理
 # scholar apis
 semanticscholar>=0.12.0
 
+# Web API
+fastapi>=0.100.0
+uvicorn>=0.23.0
 
 # 可选：浏览器自动化（用于绕过反爬虫）
 # undetected-chromedriver>=3.1.0

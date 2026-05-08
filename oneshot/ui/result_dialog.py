@@ -96,7 +96,7 @@ class Card:
         display_text = self._segment[:80] + "..." if len(self._segment) > 80 else self._segment
         
         return {
-            'full_title': f"{display_text}",
+            'full_title': display_text,
             'authors': [],
             'year': None,
             'abstract': '',
@@ -111,11 +111,11 @@ class Card:
         title = getattr(paper, 'title', None) or 'unknown title'
         authors = getattr(paper, 'authors', None) or []
         year = getattr(paper, 'year', None)
-        abstract = getattr(paper, 'abstract', None) or ''
-        ccf_rank = getattr(paper, 'ccf_rank', None) or ''
+        abstract = getattr(paper, 'abstract', None) or None
+        ccf_rank = getattr(paper, 'ccf_rank', None) or None
         cite_num = getattr(paper, 'citation_number', None)
-        doi = getattr(paper, 'doi', None) or ''
-        url = getattr(paper, 'url', None) or ''
+        doi = getattr(paper, 'doi', None) or None
+        url = getattr(paper, 'url', None) or None
         citations = getattr(paper, 'citations', None)
         
         full_title = f"[{cite_num}] {title}" if cite_num is not None else title
@@ -225,9 +225,6 @@ class Card:
                 wraplength=500
             )
             self._abstract_label.pack(anchor="w", padx=10, pady=(5, 10), fill="x")
-        else:
-            self._spacer = ctk.CTkFrame(parent, height=5, fg_color="transparent")
-            self._spacer.pack(fill="x")
     
     @staticmethod
     def _format_authors(authors):

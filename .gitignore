@@ -102,6 +102,7 @@ works/
 
 # 记忆库（会话特定）
 .memory-bank/
+.clinerules
 
 # 下载的论文 PDF
 papers/*.pdf

@@ -41,8 +41,11 @@ def _keyboard_worker(pipe, stop_event, hotkey_str):
         handler = keyboard.add_hotkey(hotkey_str, on_hotkey, suppress=True)
         logger.info(f"热键已注册: {hotkey_str}")
         
-        # 阻塞等待直到收到停止信号
-        stop_event.wait()
+        # 阻塞等待直到收到停止信号或中断
+        try:
+            stop_event.wait()
+        except KeyboardInterrupt:
+            pass  # 安静退出
     finally:
         # 清理热键
         if handler:

@@ -1,0 +1,1 @@
+[1] Ittai Abraham, Daniel Delling, Andrew V. Goldberg, and Renato F. Werneck. 2011. A Hub-Based Labeling Algorithm for Shortest Paths in Road Networks. In Proceedings of the 10th International Conference on Experimental Algorithms. 230–241.
