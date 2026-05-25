@@ -1,19 +1,19 @@
 <template>
   <v-app>
     <!-- 顶部导航栏 -->
-    <v-app-bar color="primary" elevation="2" height="40">
-      <v-app-bar-title class="text-body-2">
+    <v-app-bar color="primary" elevation="2" height="40" id="title-bar">
+      <v-app-bar-title class="text-body-2" style="-webkit-app-region: drag;">
         <v-icon icon="mdi-book-open-page-variant" size="small" class="mr-1"></v-icon>
         OneShot
       </v-app-bar-title>
       <template v-slot:append>
-        <v-btn icon="mdi-theme-light-dark" variant="text" size="small" @click="toggleTheme"></v-btn>
-        <v-btn icon="mdi-close" variant="text" size="small" @click="closeWindow"></v-btn>
+        <v-btn icon="mdi-theme-light-dark" variant="text" size="small" @click="toggleTheme" class="no-drag"></v-btn>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="onClose" class="no-drag"></v-btn>
       </template>
     </v-app-bar>
 
     <!-- 主内容：设置面板 -->
-    <v-main class="pt-12 px-2 pb-2">
+    <v-main class="main-content pt-12 px-2 pb-2">
       <SettingsPanel 
         :debug-mode="debugMode"
         :show-result-dialog="showResultDialog"
@@ -35,28 +35,34 @@
       {{ snackbar.text }}
     </v-snackbar>
 
-    <!-- 结果弹窗 -->
-    <ResultDialog
-      v-model="showResultDialog"
-      :papers="testPapers"
-      captured-text="[19] Robert Geisberger, Peter Sanders, Dominik Schultes, and Daniel Delling. 2008. Contraction hierarchies..."
-      @download="onDownloadPaper"
-      @open-url="onOpenPaperUrl"
-    />
   </v-app>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useTheme } from 'vuetify'
 import SettingsPanel from './components/SettingsPanel.vue'
-import { closeWindow, showResultDialog as openResultDialog } from './api'
+import { hideWindow, createDragHandler } from './api'
 
 // Theme
 const theme = useTheme()
 const toggleTheme = () => {
   theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark'
 }
+
+// 关闭按钮 → 隐藏窗口，保留托盘
+function onClose() {
+  hideWindow()
+}
+
+// 窗口拖动
+const dragHandler = createDragHandler('#title-bar', 'main')
+onMounted(() => {
+  dragHandler.attach()
+})
+onUnmounted(() => {
+  dragHandler.detach()
+})
 
 // Debug mode
 const debugMode = ref(true)
@@ -115,3 +121,21 @@ function onOpenPaperUrl(paper: any) {
   }
 }
 </script>
+
+<style>
+/* 主内容区域可滚动 */
+.main-content {
+  overflow-y: auto;
+  height: calc(100vh - 40px - 24px); /* 减去 app-bar 和 footer */
+}
+
+/* 标题栏拖动样式 */
+#title-bar {
+  cursor: move;
+  user-select: none;
+}
+
+.no-drag {
+  cursor: default !important;
+}
+</style>

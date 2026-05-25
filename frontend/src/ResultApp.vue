@@ -1,11 +1,11 @@
 <template>
   <v-app>
     <!-- 标题栏 -->
-    <div class="result-header" @mousedown="onDragStart">
+    <div class="result-header">
       <v-icon icon="mdi-book-open-page-variant" size="small" class="mr-2"></v-icon>
       <span class="text-body-2">搜索结果 - {{ papers.length }} 篇文献</span>
       <v-spacer></v-spacer>
-      <v-btn icon="mdi-close" variant="text" size="x-small" @click="closeWindow"></v-btn>
+      <v-btn icon="mdi-close" variant="text" size="x-small" @click="closeWindow" class="no-drag"></v-btn>
     </div>
 
     <!-- 内容区域 -->
@@ -75,23 +75,28 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { closeResultWindow, createDragHandler } from './api'
 
 // 从 pywebview API 获取数据
 const capturedText = ref('')
 const papers = ref<any[]>([])
 
+// 窗口拖动
+const dragHandler = createDragHandler('.result-header', 'result')
 onMounted(async () => {
+  dragHandler.attach()
+
   // 轮询检查结果是否就绪
   const maxRetries = 60
   const interval = 500 // 500ms
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      // 调用 pywebview API
-      const resultJson = (window as any).pywebview?.api?.getSearchResult?.()
+      // 调用 pywebview API (返回 Promise)
+      const resultJson = await (window as any).pywebview?.api?.getResult?.()
       if (resultJson) {
         const data = JSON.parse(resultJson)
-        if (data.ready && data.papers && data.papers.length > 0) {
+        if (data.papers && data.papers.length > 0) {
           papers.value = data.papers
           capturedText.value = data.captured_text || ''
           console.info('结果已加载:', data.papers.length, '篇')
@@ -143,15 +148,16 @@ function onOpenUrl(paper: any) {
 }
 
 function closeWindow() {
-  window.pywebview?.api?.close?.()
-}
-
-function onDragStart(event: MouseEvent) {
-  // 拖拽逻辑（如果需要的话）
+  closeResultWindow()
 }
 </script>
 
 <style scoped>
+/* 整个应用容器隐藏溢出 */
+:deep(.v-application) {
+  overflow: hidden;
+}
+
 .result-header {
   display: flex;
   align-items: center;
@@ -160,7 +166,10 @@ function onDragStart(event: MouseEvent) {
   border-bottom: 1px solid #333;
   cursor: move;
   user-select: none;
-  -webkit-app-region: drag;
+}
+
+.no-drag {
+  cursor: default;
 }
 
 .result-content {

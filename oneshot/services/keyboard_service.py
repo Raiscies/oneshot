@@ -69,6 +69,11 @@ class KeyboardService:
         self._hotkey = ({"ctrl"}, "q")  # 默认 Ctrl+Q
         self._hotkey_str = "ctrl+q"
     
+    @property
+    def is_alive(self) -> bool:
+        """检查键盘监听子进程是否存活"""
+        return self._process is not None and self._process.is_alive()
+    
     def set_hotkey(self, callback: Callable, modifier: set = None, key: str = None):
         """
         设置快捷键
@@ -119,14 +124,19 @@ class KeyboardService:
     
     def _listen_pipe(self):
         """监听管道，接收子进程消息"""
-        while self._process and self._process.is_alive():
-            try:
-                if self._pipe.poll(0.1):
-                    msg = self._pipe.recv()
-                    if msg == "trigger" and self._callback:
-                        self._callback()
-            except Exception:
-                break
+        try:
+            while self._process and self._process.is_alive():
+                try:
+                    if self._pipe and self._pipe.poll(0.1):
+                        msg = self._pipe.recv()
+                        if msg == "trigger" and self._callback:
+                            self._callback()
+                except (EOFError, BrokenPipeError, ConnectionResetError):
+                    break
+                except Exception:
+                    break
+        finally:
+            logger.debug("管道监听线程退出")
     
     def stop(self):
         """停止键盘监听"""

@@ -118,11 +118,17 @@ class TrayService:
         self._tray.run()
     
     def stop(self):
-        """停止托盘"""
+        """停止托盘（幂等，可安全多次调用）"""
+        if not self._running:
+            return
+        self._running = False
         if self._tray:
-            self._tray.stop()
-            self._running = False
-            logger.info("系统托盘已停止")
+            try:
+                self._tray.stop()
+            except Exception:
+                pass  # pystray 可能在关闭时抛出异常
+            self._tray = None
+        logger.info("系统托盘已停止")
     
     def notify(self, title: str, message: str):
         """
@@ -149,9 +155,9 @@ class TrayService:
     
     def _handle_quit(self, icon=None, item=None):
         """处理退出"""
-        # 延迟停止托盘，让主窗口有时间清理
+        # 先调用回调（由主程序处理所有清理）
         if self._on_quit:
             self._on_quit()
-        # 延迟停止托盘，避免与 Tkinter 销毁冲突
-        import threading
-        threading.Thread(target=lambda: (threading.Event().wait(0.1), self.stop()), daemon=True).start()
+        # 再停止托盘图标（退出 pystray 的 run() 循环）
+        if self._tray:
+            self._tray.stop()
