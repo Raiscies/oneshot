@@ -35,12 +35,12 @@ class Paper:
     abstract: Optional[str] = None
     tldr: Optional[str] = None  # 论文摘要的简短版本
     keywords: list[str] = field(default_factory=list)
-    citations: int = 0  # 被引用次数
+    citation_count: Optional[int] = None  # 被引用次数
     ccf_rank: Optional[str] = None  # CCF 等级：A/B/C/none
     
     # 原始数据
     raw_citation: Optional[str] = None  # 原始引用字符串
-    citation_number: Optional[int] = None  # 引用编号（如 [1] 中的 1）
+    citation_index: Optional[str] = None  # 引用索引（例如 [1] [Tho00a] 方括号里的内容, 不一定为数字）
     
     # 数据库字段
     id: Optional[int] = None
@@ -121,7 +121,8 @@ class Paper:
                 result[f.name] = str(val) if val else None
             elif f.name in ('created_at', 'updated_at') and val:
                 result[f.name] = val.isoformat()
-            else:
+            elif val is not None:
+                # ignore None values
                 result[f.name] = val
         return result
     

@@ -7,7 +7,7 @@ import subprocess
 import json
 import logging
 import re
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Callable
 from pathlib import Path
 from datetime import datetime
 
@@ -24,6 +24,9 @@ ANYSTYLE_PATH = PROJECT_ROOT / "oneshot" / "third_party" / "anystyle" / "bin" / 
 
 class CitationParser:
     """引用解析服务 - 使用 AnyStyle"""
+
+    BREAKET_ITEM_MATCHER = re.compile(r'\[[\w\+]{1,8}\]')
+    LINEBREAK_SPLITER    = re.compile(r'[\n\t\v\r\f]')
     
     def __init__(self):
         """
@@ -39,11 +42,11 @@ class CitationParser:
         """检查 AnyStyle 是否可用"""
         return self.anystyle_path is not None
     
-    def split_citations(self, text: str) -> List[str]:
+    def split_citations(self, text: str) -> List[tuple]:
         """
         将包含多个引用的文本分割成单独的引用
         
-        分割逻辑：用 \\[\\d+\\] 匹配完整的方括号引用标记（如 [1]），用这些位置分段
+        分割逻辑：用方括号引用标记（如 [1]、[17]、[n.d.]）分段
         
         Args:
             text: 原始文本
@@ -51,56 +54,52 @@ class CitationParser:
         Returns:
             分割后的引用文本列表
         """
-        # 先去掉换行符，把多行文本变成单行
-        text = text.replace('\n', ' ').replace('\r', ' ')
-        # 移除多余空格
-        text = re.sub(r'\s+', ' ', text)
+
+        # 1. 处理换行：单词边界插入空格，其余直接拼接
         
-        # 查找所有完整的方括号引用标记（如 [1]、[2]）
-        bracket_matches = list(re.finditer(r'\[\d+\]', text))
-        
-        # 如果没有方括号引用标记，返回整个文本作为单一引用
-        if not bracket_matches:
-            if text.strip():
-                return [text.strip()]
-            return []
-        
-        # 根据方括号引用标记位置分割文本
-        # 从文本开始到第一个 [x]（或每个 [x] 到下一个 [x]）是一段
-        citations = []
-        
-        # 处理第一段：从文本开始到第一个匹配
-        first_match = bracket_matches[0]
-        if first_match.start() > 0:
-            prefix = text[:first_match.start()].strip()
-            if prefix:
-                citations.append(prefix)
-        
-        # 处理每个 [x] 到下一个 [x] 之间的文本
-        for i, match in enumerate(bracket_matches):
-            start = match.start()
-            # 下一个匹配的起始位置，如果没有则到文本末尾
-            if i + 1 < len(bracket_matches):
-                end = bracket_matches[i + 1].start()
+        lines = re.split(self.LINEBREAK_SPLITER, text)
+        text = ''
+        should_insert_space = False
+        # rebuild the text
+        for line in lines:
+            line = line.lstrip(' ')
+            if len(line) == 0: continue
+            # insert a space only if there are atleast one word boundary between two lines
+            # 空格的插入可能会对解析造成相当微妙的影响, 进而影响文献查询
+            # 目前也只能面向cases进行调整, 无法保证所有的空格插入都是合适的
+            if should_insert_space or line[0].isalpha():
+                text += ' '
+            should_insert_space = line[-1].isalpha()
+            text += line
+
+        if len(text) == 0: return []
+
+        citations = [] 
+        last_match = None
+        for match in re.finditer(self.BREAKET_ITEM_MATCHER, text): 
+            # complete the segment before this match
+            if last_match is None:
+                content = text[0:match.start()].strip()
+                if len(content) != 0: 
+                    citations.append((None, content))
             else:
-                end = len(text)
-            
-            segment = text[start:end].strip()
-            if segment:
-                citations.append(segment)
-        
-        # 过滤空字符串
-        citations = [c for c in citations if c.strip()]
-        
-        # 如果分割出少于2个片段，返回整个文本
-        if len(citations) < 2:
-            return [text.strip()]
-        
+                content = text[last_match.end():match.start()].rstrip()
+                # [(cite-index, cite-content), ...]
+                # eat the '[' and ']' breakets
+                citations.append((last_match.group()[1:-1], content))
+
+            last_match = match
+
+        # handle the last segment
+        if last_match is None:
+            citations.append((None, text))
+        else:
+            citations.append((last_match.group()[1:-1], text[last_match.end():]))
+
         logger.debug(f"分割出 {len(citations)} 个引用片段")
-        # logger.debug(f"引用片段: {citations}")
         return citations
     
-    def _save_debug_output(self, raw_citation: str, all_outputs: List[dict]) -> None:
+    def _save_debug_output(self, raw_citation: str, output: dict) -> None:
         """
         保存调试文件（整段源文本的所有解析结果）
         
@@ -118,14 +117,10 @@ class CitationParser:
             logger.info(f"正在保存调试文件到: {debug_file}")
             
             # 构建输出内容
-            lines = [f"Raw Citation:\n{raw_citation}\n"]
+            lines = [raw_citation]
             lines.append(f"\n{'='*50}\n")
-            
-            for i, item in enumerate(all_outputs):
-                lines.append(f"\n--- Segment {i + 1} ---\n")
-                lines.append(f"Input:\n{item['input']}\n\n")
-                lines.append(f"Output:\n{item['output']}\n")
-                lines.append(f"\n{'='*50}\n")
+            lines.append(output)
+            lines.append(f"\n{'='*50}\n")
             
             with open(debug_file, 'w', encoding='utf-8') as f:
                 f.write(''.join(lines))
@@ -137,14 +132,14 @@ class CitationParser:
             import traceback
             logger.error(traceback.format_exc())
     
-    def _parse_single_citation(self, citation: str, raw_citation: str, debug_output: list = None) -> Optional[Paper]:
+    def parse_single(self, citation: str, citation_index: Optional[str] = None, debug: bool = False) -> Optional[Paper]:
         """
         解析单个引用字符串
         
         Args:
             citation: 单个引用字符串
-            raw_citation: 原始引用字符串（用于调试）
-            debug_output: 如果提供，收集调试信息到此列表
+            citation_index: 引用索引号
+            debug: 保存调试输出
         
         Returns:
             Paper 对象，解析失败返回 None
@@ -156,7 +151,7 @@ class CitationParser:
                 input=citation,
                 capture_output=True,
                 text=True,
-                timeout=20,
+                timeout=10,
                 encoding='utf-8'
             )
             
@@ -165,34 +160,33 @@ class CitationParser:
                 return None
             
             output = result.stdout.strip()
-            
-            # 收集调试信息
-            if debug_output is not None:
-                formatted_output = output
-                try:
-                    output_obj = json.loads(output)
-                    formatted_output = json.dumps(output_obj, ensure_ascii=False, indent=2)
-                except json.JSONDecodeError:
-                    pass
-                debug_output.append({"input": citation, "output": formatted_output})
-            
             if not output:
                 logger.warning("AnyStyle 输出为空")
                 return None
             
             try:
                 items = json.loads(output)
-                if isinstance(items, list) and len(items) > 0:
-                    item = items[0]
-                elif isinstance(items, dict):
-                    item = items
-                else:
-                    return None
-                
-                return self._parse_item_to_paper(item, raw_citation)
             except json.JSONDecodeError:
+                logger.warning("Failed to load anystyle output as json")
+                return None
+
+            # get the first item and ignore others(if possible)
+            if isinstance(items, list) and len(items) > 0:
+                item = items[0]
+            elif isinstance(items, dict):
+                item = items
+            else:
                 logger.warning(f"AnyStyle 输出无法解析: {output[:200]}")
                 return None
+            
+            # 收集调试信息
+            if debug: 
+                self._save_debug_output(
+                    citation, 
+                    json.dumps(item, ensure_ascii=False, indent=2)
+                )
+            
+            return self._parse_item_to_paper(item, citation, citation_index)
             
         except subprocess.TimeoutExpired:
             logger.error("AnyStyle 解析超时")
@@ -221,28 +215,22 @@ class CitationParser:
         
         logger.info(f"分割出 {len(citations)} 个引用")
         
-        # 收集所有解析结果用于调试
-        debug_outputs = [] if debug else None
-        
         # 逐个解析每个引用
         papers = []
-        for citation_text in citations:
-            paper = self._parse_single_citation(citation_text, citation, debug_outputs)
+        for index, content in citations:
+            paper = self.parse_single(content, citation_index=index, debug = debug)
             if paper:
                 papers.append(paper)
         
-        # 保存调试文件（如果启用）
-        if debug and debug_outputs:
-            self._save_debug_output(citation, debug_outputs)
-        
         if not papers:
             logger.warning("所有引用解析失败")
-            raise RuntimeError("AnyStyle 未能解析出任何文献")
+            return []
+            # raise RuntimeError("AnyStyle 未能解析出任何文献")
         
         logger.info(f"AnyStyle 解析成功，共 {len(papers)} 篇文献")
         return papers
     
-    def _parse_item_to_paper(self, item: dict, raw_citation: str) -> Paper:
+    def _parse_item_to_paper(self, item: dict, raw_citation: str, citation_index: Optional[str] = None) -> Paper:
         """
         将 AnyStyle 解析的 JSON 项转换为 Paper 对象
         
@@ -261,18 +249,12 @@ class CitationParser:
                 return value[0] if value else default
             return value
         
-        # 提取 citation_number（从 AnyStyle 返回的 citation-number 字段提取）
-        citation_number = None
-        citation_number_field = item.get("citation-number")
-        if citation_number_field:
-            if isinstance(citation_number_field, str):
-                # 尝试从字符串中提取数字
-                match = re.search(r'\d+', citation_number_field)
-                if match:
-                    citation_number = int(match.group())
-            elif isinstance(citation_number_field, (int, float)):
-                citation_number = int(citation_number_field)
-        
+        if citation_index is None:
+            # 提取 citation_number（从 AnyStyle 返回的 citation-number 字段提取）
+            citation_number_field = item.get("citation-number", None)
+            if citation_number_field and isinstance(citation_number_field, (str, int, float)):
+                citation_index = str(citation_number_field)
+
         # 提取作者
         authors = item.get("author", []) or []
         if isinstance(authors, list):
@@ -351,5 +333,5 @@ class CitationParser:
             publisher=publisher,
             url=url,
             raw_citation=raw_citation,
-            citation_number=citation_number,
+            citation_index=citation_index
         )

@@ -12,6 +12,7 @@ OneShot - 主入口文件
 """
 
 from pathlib import Path
+from typing import Optional
 
 import asyncio
 import logging
@@ -23,6 +24,8 @@ import argparse
 import time
 import json
 import webview
+import concurrent.futures
+
 
 from oneshot.services import (
     KeyboardService,
@@ -66,21 +69,39 @@ class Api:
     def __init__(self):
         self._result_data = None
         self._result_ready = threading.Event()
+        self._result_version = 0  # 版本号，每次 setResult 递增，前端通过轮询版本号检测更新
         self._result_window = None
         self._main_window = None
     
     def setResult(self, data: str):
-        """设置搜索结果，供前端通过 evaluate_js 调用"""
+        """设置搜索结果，递增版本号通知前端"""
         self._result_data = json.loads(data) if isinstance(data, str) else data
         self._result_ready.set()
-        logger.info(f"结果已设置: {len(self._result_data.get('papers', []))} 篇")
+        self._result_version += 1
+    
+    def updatePaper(self, index: int, paper_json: str):
+        """增量更新单篇论文结果（索引从 0 开始），递增版本号"""
+        if not self._result_data:
+            return
+        try:
+            paper = json.loads(paper_json) if isinstance(paper_json, str) else paper_json
+            papers = self._result_data.get("papers", [])
+            if 0 <= index < len(papers):
+                papers[index] = paper
+            self._result_version += 1
+            logger.debug(f"论文 #{index} 已更新 (v{self._result_version}): {paper.get('title', '?')[:40]}")
+        except Exception as e:
+            logger.error(f"更新论文失败: {e}")
     
     def getResult(self) -> str:
         """前端获取搜索结果"""
         if self._result_data:
-            logger.info(f"返回搜索结果: {len(self._result_data.get('papers', []))} 篇")
             return json.dumps(self._result_data)
         return json.dumps({"papers": [], "ready": False})
+    
+    def getResultVersion(self) -> int:
+        """前端轮询版本号，检测是否有新结果"""
+        return self._result_version
     
     def isReady(self) -> bool:
         """检查结果是否就绪"""
@@ -111,20 +132,20 @@ class Api:
             except Exception as e:
                 logger.error(f"隐藏窗口失败: {e}")
     
-    def moveWindow(self, x: int, y: int, window_type: str = "main"):
-        """移动指定窗口到屏幕坐标 (x, y)
-        
-        Args:
-            x: 目标屏幕 X 坐标
-            y: 目标屏幕 Y 坐标
-            window_type: 'main' 或 'result'，指定要移动哪个窗口
-        """
+    def toggleResultOnTop(self) -> bool:
+        """切换结果窗口置顶状态，返回新状态"""
+
+        if not self._result_window:
+            return False
         try:
-            target = self._result_window if window_type == "result" else self._main_window
-            if target:
-                target.move(x, y)
+            current_state = self._result_window.on_top
+            logger.debug(f"toggling, current state is {current_state}")
+            self._result_window.on_top = not current_state 
+            
+            return self._result_window.on_top
         except Exception as e:
-            logger.error(f"移动窗口失败: {e}")
+            logger.error(f"切换置顶失败: {e}")
+            return False
     
     def setMainWindow(self, window):
         """设置主窗口引用"""
@@ -168,6 +189,8 @@ class OneShotApp:
         # 线程
         self._frontend_thread = None
         self._stop_event = threading.Event()
+        self._current_executor = None  # 当前搜索的线程池，新搜索时取消旧任务
+        self._search_id = 0  # 搜索 ID，防止旧搜索的过期更新
     
     def _init_services(self):
         """初始化所有服务"""
@@ -207,10 +230,19 @@ class OneShotApp:
         
         logger.debug(f"获取到文本内容: {citation[:50]}...")
         
-        self._do_search(citation)
+        # 在新线程中执行搜索，避免阻塞键盘监听
+        threading.Thread(target=self._do_search, args=(citation,), daemon=True).start()
     
     def _do_search(self, citation: str):
-        """执行搜索并显示结果窗口"""
+        """执行搜索 — 立即显示窗口，并行逐篇解析，增量更新"""
+        # 取消正在进行的旧搜索
+        self._search_id += 1
+        my_id = self._search_id
+        if self._current_executor:
+            logger.info(f"取消旧搜索任务 (id<{my_id})")
+            self._current_executor.shutdown(wait=False, cancel_futures=True)
+            self._current_executor = None
+        
         try:
             # 分割引用
             segments = self._citation_parser.split_citations(citation)
@@ -219,65 +251,105 @@ class OneShotApp:
                 self._tray_service.notify("OneShot", "未能解析引用文本")
                 return
             
-            logger.info(f"分割出 {len(segments)} 个引用")
+            logger.info(f"搜索 #{my_id}: 分割出 {len(segments)} 个引用")
             self._tray_service.notify("OneShot", f"正在解析 {len(segments)} 篇文献...")
             
-            # 解析并搜索
-            papers = []
-            for segment in segments:
-                parsed = self._citation_parser.parse(segment, debug=self.debug_mode)
-                if not parsed:
-                    continue
-                
-                paper = parsed[0]
-                # 搜索补充信息
-                results = asyncio.run(self._search_service.search(paper))
-                if results:
-                    paper.merge(results[0].paper)
-                papers.append(self._paper_to_dict(paper))
-            
-            logger.info(f"搜索完成: {len(papers)} 篇文献")
-            self._tray_service.notify("OneShot", f"找到 {len(papers)} 篇文献")
-            
-            # 设置结果供前端获取
-            result_data = {
-                "papers": papers,
+            # 1. 立即设置初始结果（仅捕获文本 + 占位卡片）
+            placeholders = [{"_placeholder": True, "_index": i} for i in range(len(segments))]
+            initial_data = {
+                "papers": placeholders,
                 "captured_text": citation,
-                "message": f"找到 {len(papers)} 篇文献",
+                "message": f"正在解析 {len(segments)} 篇文献...",
             }
-            self._js_api.setResult(json.dumps(result_data))
-            
-            # 创建结果窗口
+            self._js_api.setResult(json.dumps(initial_data))
             self._create_result_window()
             
+            # 2. 并行解析每个分段
+            def parse_segment(idx: int, segment: tuple): # idx: internal index
+                """解析单个分段，分两阶段推送"""
+                # 检查是否已被取消
+                if self._search_id != my_id:
+                    return
+                try:
+                    # 阶段1：解析引用 (citation-index, citation-content)
+                    paper = self._citation_parser.parse_single(citation=segment[1], citation_index=segment[0], debug=self.debug_mode)
+                    if self._search_id != my_id:  # 解析期间被取消
+                        return
+                    if not paper:
+                        self._js_api.updatePaper(idx, json.dumps({
+                            "_placeholder": True, "_index": idx, "_error": "解析失败"
+                        }))
+                        return
+                    
+                    paper_dict = paper.to_dict()
+                    paper_dict["_searching"] = True
+                    self._js_api.updatePaper(idx, json.dumps(paper_dict))
+                    
+                    # 阶段2：联网搜索
+                    if self._search_id != my_id:  # 推送后再次检查
+                        return
+                    results = asyncio.run(self._search_service.search(paper))
+                    if self._search_id != my_id:  # 搜索期间被取消
+                        return
+                    if results:
+                        # use result as the major paper data 
+                        results[0].paper.merge(paper)
+                        paper = results[0].paper
+
+                    paper_dict = paper.to_dict()
+                    
+                    self._js_api.updatePaper(idx, json.dumps(paper_dict))
+                    
+                except Exception as e:
+                    if self._search_id == my_id:
+                        logger.error(f"解析分段 #{idx} 失败: {e}")
+                        self._js_api.updatePaper(idx, json.dumps({
+                            "_placeholder": True, "_index": idx, "_error": str(e)
+                        }))
+            
+            self._current_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(len(segments), 4)
+            )
+            futures = [
+                self._current_executor.submit(parse_segment, i, seg)
+                for i, seg in enumerate(segments) 
+            ]
+            concurrent.futures.wait(futures)
+            
+            # 检查是否被新搜索取代
+            if self._search_id != my_id:
+                logger.debug(f"搜索 #{my_id} 已被新搜索取代，跳过收尾")
+                return
+            
+            # 3. 全部完成后更新最终消息
+            final_papers = self._js_api._result_data.get("papers", []) if self._js_api._result_data else []
+            success_count = sum(1 for p in final_papers if not p.get("_placeholder") and not p.get("_error"))
+            final_data = {
+                "papers": final_papers,
+                "captured_text": citation,
+                "message": f"找到 {success_count} 篇文献",
+            }
+            self._js_api._result_data = final_data
+            self._js_api._result_version += 1
+            
+            logger.info(f"搜索 #{my_id} 完成: {success_count}/{len(segments)} 篇")
+            self._tray_service.notify("OneShot", f"找到 {success_count} 篇文献")
+            
         except Exception as e:
-            logger.error(f"搜索失败: {e}")
-            self._tray_service.notify("OneShot", f"搜索失败: {e}")
+            if self._search_id == my_id:
+                logger.error(f"搜索失败: {e}")
+                self._tray_service.notify("OneShot", f"搜索失败: {e}")
+        finally:
+            if self._current_executor and self._search_id == my_id:
+                self._current_executor.shutdown(wait=False)
+                self._current_executor = None
     
-    def _paper_to_dict(self, paper) -> dict:
-        """将 Paper 对象转换为字典"""
-        return {
-            "title": paper.title or "未知标题",
-            "authors": paper.authors or [],
-            "year": paper.year,
-            "abstract": paper.abstract,
-            "ccf_rank": paper.ccf_rank,
-            "doi": paper.doi,
-            "url": paper.url,
-            "citation_number": paper.citation_number,
-            "citations": getattr(paper, 'citations', None),
-        }
     
     def _create_result_window(self):
-        """创建结果窗口"""
-        # 先关闭旧窗口（如果存在）
+        """确保结果窗口存在（已存在则跳过，不存在则创建）"""
         if self._js_api._result_window:
-            try:
-                self._js_api._result_window.destroy()
-                self._js_api._result_window = None
-            except Exception as e:
-                logger.debug(f"关闭旧窗口失败: {e}")
-        
+            logger.debug("结果窗口已存在，跳过创建")
+            return
         def create_window_thread():
             try:
                 frontend_url = _get_frontend_url()
@@ -294,7 +366,8 @@ class OneShotApp:
                     width=550,
                     height=600,
                     min_size=(400, 300),
-                    resizable=True,
+                    # resizable=True,
+                    easy_drag=True,
                     frameless=True,
                     on_top=True,
                     js_api=self._js_api,
@@ -393,12 +466,13 @@ class OneShotApp:
             url=frontend_url,
             width=400,
             height=500,
-            min_size=(350, 400),
-            resizable=True,
+            # min_size=(350, 400),
+            # resizable=True,
             frameless=True,
             js_api=self._js_api,
         )
         self._js_api.setMainWindow(window)
+        
         logger.info("主窗口已创建")
         return window
     

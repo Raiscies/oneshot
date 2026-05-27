@@ -40,3 +40,6 @@ Distance Queries on Road Networks. In Proceedings of the ACM SIGMOD Internationa
 Data.
 [18] Uriel Feige and Mohammad Mahdian. 2006. Finding small balanced separators. In Proceedings of the 38th Annual ACM
 Symposium on Theory of Computing, Jon M. Kleinberg (Ed.). 375–384.
+[3] Renzo Angles, Marcelo Arenas, Pablo Barceló, Aidan Hogan, Juan Reutter, and
+Domagoj Vrgoč. 2017. Foundations of modern query languages for graph databases.
+ACM Computing Surveys (CSUR) 50, 5 (2017), 1–40.

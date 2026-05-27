@@ -83,7 +83,10 @@ class SemanticScholarSearcher:
         title = getattr(paper_data, 'title', '') or '未知标题'
         year = getattr(paper_data, 'year', None)
         abstract = getattr(paper_data, 'abstract', '') or ''
-        tldr = getattr(paper_data, 'tldr', '') or ''
+        tldr = ''
+        if hasattr(paper_data, 'tldr') and hasattr(paper_data.tldr, 'text'):
+            tldr = paper_data.tldr.text
+        
         citation_count = getattr(paper_data, 'citationCount', 0) or 0
         
         # 提取作者
@@ -111,7 +114,7 @@ class SemanticScholarSearcher:
             doi=doi,
             abstract=abstract,
             url=url,
-            citations=citation_count,
+            citation_count=citation_count,
             ccf_rank='',
             tldr=tldr
         )

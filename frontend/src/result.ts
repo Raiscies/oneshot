@@ -4,6 +4,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
+import './style.css'
 import ResultApp from './ResultApp.vue'
 
 // 创建 Vuetify 实例
