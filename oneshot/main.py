@@ -46,7 +46,7 @@ logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 DEFAULT_STORAGE_DIR = Path(__file__).parent.parent / 'papers'
-FRONTEND_DIR = Path(__file__).parent.parent / 'frontend'
+FRONTEND_DIR = Path(__file__).parent / 'frontend'
 FRONTEND_DIST_DIR = FRONTEND_DIR / 'dist'
 FRONTEND_PORT = 5173
 
@@ -366,7 +366,6 @@ class OneShotApp:
                     width=550,
                     height=600,
                     min_size=(400, 300),
-                    # resizable=True,
                     easy_drag=True,
                     frameless=True,
                     on_top=True,
@@ -385,6 +384,7 @@ class OneShotApp:
         """设置快捷键"""
         modifiers, key = self._get_hotkey_info()
         self._keyboard_service.set_hotkey(self._on_hotkey_pressed, modifiers, key)
+    
     
     def _setup_tray(self):
         """设置托盘"""

@@ -26,7 +26,7 @@ class CitationParser:
     """引用解析服务 - 使用 AnyStyle"""
 
     BREAKET_ITEM_MATCHER = re.compile(r'\[[\w\+]{1,8}\]')
-    LINEBREAK_SPLITER    = re.compile(r'[\n\t\v\r\f]')
+    LINEBREAK_SPLITER    = re.compile(r'[\n\r\f]')
     
     def __init__(self):
         """
@@ -46,7 +46,7 @@ class CitationParser:
         """
         将包含多个引用的文本分割成单独的引用
         
-        分割逻辑：用方括号引用标记（如 [1]、[17]、[n.d.]）分段
+        分割逻辑：用方括号引用标记（如 [1]、[abc17]）分段
         
         Args:
             text: 原始文本
