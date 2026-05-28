@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# AnyStyle 内置路径
-ANYSTYLE_PATH = PROJECT_ROOT / "oneshot" / "third_party" / "anystyle" / "bin" / "anystyle"
+# AnyStyle 集成路径（Ruby 包装脚本 + submodule 库）
+ANYSTYLE_RUNNER = PROJECT_ROOT / "oneshot" / "integrations" / "anystyle" / "runner.rb"
 
 
 class CitationParser:
@@ -32,15 +32,15 @@ class CitationParser:
         """
         初始化引用解析器
         """
-        if not ANYSTYLE_PATH.exists():
-            raise RuntimeError(f"AnyStyle 未找到: {ANYSTYLE_PATH}")
+        if not ANYSTYLE_RUNNER.exists():
+            raise RuntimeError(f"AnyStyle 未找到: {ANYSTYLE_RUNNER}")
         
-        self.anystyle_path = str(ANYSTYLE_PATH)
-        logger.info(f"AnyStyle 路径: {self.anystyle_path}")
+        self.runner_path = str(ANYSTYLE_RUNNER)
+        logger.info(f"AnyStyle 路径: {self.runner_path}")
     
     def is_available(self) -> bool:
         """检查 AnyStyle 是否可用"""
-        return self.anystyle_path is not None
+        return self.runner_path is not None
     
     def split_citations(self, text: str) -> List[tuple]:
         """
@@ -147,7 +147,7 @@ class CitationParser:
         try:
             # 直接调用 AnyStyle
             result = subprocess.run(
-                ["ruby", self.anystyle_path],
+                ["ruby", self.runner_path],
                 input=citation,
                 capture_output=True,
                 text=True,

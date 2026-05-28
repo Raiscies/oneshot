@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 
+# 脚本在 integrations/anystyle/，submodule 在 third_party/anystyle/
 SCRIPT_DIR = File.dirname(__FILE__)
-ROOT_DIR = File.expand_path('..', SCRIPT_DIR)
+ROOT_DIR = File.expand_path('../../third_party/anystyle', SCRIPT_DIR)
 LIB_DIR = File.join(ROOT_DIR, 'lib')
 
 # set LOAD_PATH
