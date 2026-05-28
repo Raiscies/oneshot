@@ -1,0 +1,3 @@
+[submodule "oneshot/third_party/cloudflarebypass"]
+	path = oneshot/third_party/cloudflarebypass
+	url = https://github.com/sarperavci/CloudflareBypassForScraping.git
