@@ -22,6 +22,17 @@ DEFAULT_CONFIG = {
     },
     "storage": {
         "path": ""  # 空字符串表示使用默认路径
+    },
+    "cf_bypass": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "download": {
+        "auto_open_pdf": False,
+        "auto_download_count": 1
+    },
+    "search": {
+        "engine_url": "https://scholar.google.com/scholar?q={query}"
     }
 }
 
@@ -125,3 +136,18 @@ class ConfigService:
     def storage(self) -> Dict[str, Any]:
         """获取存储配置"""
         return self._config.get("storage", DEFAULT_CONFIG["storage"])
+
+    @property
+    def cf_bypass(self) -> Dict[str, Any]:
+        """获取 CloudflareBypass 配置"""
+        return self._config.get("cf_bypass", DEFAULT_CONFIG["cf_bypass"])
+
+    @property
+    def download(self) -> Dict[str, Any]:
+        """获取下载配置"""
+        return self._config.get("download", DEFAULT_CONFIG["download"])
+
+    @property
+    def search(self) -> Dict[str, Any]:
+        """获取搜索配置"""
+        return self._config.get("search", DEFAULT_CONFIG["search"])

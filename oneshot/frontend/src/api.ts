@@ -13,6 +13,20 @@ declare global {
         setResult: (data: string) => void
         hideMainWindow: () => void
         toggleResultOnTop: () => Promise<boolean>
+        setHotkey: (modifiers: string[], key: string) => void
+        getHotkey: () => Promise<string>
+        setCfBypassConfig: (host: string, port: number) => void
+        getCfBypassConfig: () => Promise<string>
+        downloadByDoi: (doi: string) => void
+        getDownloadProgress: (doi: string) => Promise<string>
+        openFile: (path: string) => void
+        searchInBrowser: (query: string) => void
+        setAutoOpenPdf: (enabled: boolean) => void
+        getAutoOpenPdf: () => Promise<boolean>
+        setAutoDownloadCount: (count: number) => void
+        getAutoDownloadCount: () => Promise<number>
+        setSearchUrl: (url: string) => void
+        getSearchUrl: () => Promise<string>
       }
     }
   }

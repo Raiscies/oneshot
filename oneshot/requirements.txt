@@ -1,9 +1,6 @@
 # OneShot - 依赖列表
 # 一键直达文献：基于快捷键的论文文献快速下载工具
 
-# UI框架
-# customtkinter>=5.2.0
-
 # 网络请求
 httpx>=0.24.0
 aiohttp>=3.8.0
@@ -16,24 +13,17 @@ pywinauto>=0.6.8     # Windows UI 自动化
 pywebview>=6.2.1       # 内置浏览器显示文献详情
 
 pystray>=0.19.4      # 系统托盘
-# Pillow>=9.5.0        # 图标处理
 
-# # PDF处理
-# PyPDF2>=3.0.0
-
-# 数据存储  
 # scholarly>=1.7.0
 
 # scholar apis
 semanticscholar>=0.12.0
 
 # Web API
-# fastapi>=0.100.0
 uvicorn>=0.23.0
-
-# 可选：浏览器自动化（用于绕过反爬虫）
-# undetected-chromedriver>=3.1.0
 
 # 开发依赖
 # ruby (用于AnyStyle引用解析，需要单独安装)
-# anystyle-cli (Ruby gem: gem install anystyle-cli)
+
+# 第三方子模块依赖
+-r third_party/cloudflarebypass/server_requirements.txt

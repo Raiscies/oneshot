@@ -19,7 +19,7 @@
       <!-- 论文卡片列表 -->
       <div class="papers-list">
         <div 
-          v-for="(paper, index) in papers" 
+          v-for="(paper, index) in sortedPapers" 
           :key="index"
           class="paper-card"
         >
@@ -41,14 +41,43 @@
               <span class="paper-title selectable">{{ paper.title }}</span>
             </template>
             <div class="paper-actions" v-if="!paper._placeholder && !paper._error">
-              <v-btn
-                v-if="paper.url || paper.doi"
-                icon="mdi-download"
-                color="success"
-                variant="flat"
-                size="x-small"
-                @click="onDownload(paper)"
-              ></v-btn>
+              <span class="download-btn-wrapper" v-if="paper.doi">
+                <v-btn
+                  v-if="downloadStates[paper.doi]?.status === 'unsupported'"
+                  icon="mdi-download-off"
+                  variant="flat"
+                  size="x-small"
+                  disabled
+                  title="暂不支持该出版商"
+                ></v-btn>
+                <v-btn
+                  v-else-if="downloadStates[paper.doi]?.status !== 'done'"
+                  icon="mdi-download"
+                  color="success"
+                  variant="flat"
+                  size="x-small"
+                  :disabled="downloadStates[paper.doi]?.status === 'downloading'"
+                  @click="onDownload(paper)"
+                ></v-btn>
+                <v-btn
+                  v-else
+                  icon="mdi-file-pdf-box"
+                  color="error"
+                  variant="flat"
+                  size="x-small"
+                  @click="onOpenPdf(paper.doi)"
+                  title="打开已下载的 PDF"
+                ></v-btn>
+                <v-progress-circular
+                  v-if="downloadStates[paper.doi]?.status === 'downloading'"
+                  :model-value="(downloadStates[paper.doi]?.progress ?? 0) * 100"
+                  :indeterminate="downloadStates[paper.doi]?.progress === undefined"
+                  size="26"
+                  width="3"
+                  color="success"
+                  class="download-progress"
+                ></v-progress-circular>
+              </span>
               <v-btn
                 v-if="paper.url || paper.doi"
                 icon="mdi-open-in-new"
@@ -56,6 +85,15 @@
                 variant="flat"
                 size="x-small"
                 @click="onOpenUrl(paper)"
+              ></v-btn>
+              <v-btn
+                v-if="!paper._placeholder && !paper._error && !paper.doi && !paper.url"
+                icon="mdi-magnify"
+                color="warning"
+                variant="flat"
+                size="x-small"
+                @click="onSearchTitle(paper)"
+                title="在 Google Scholar 中搜索"
               ></v-btn>
               <!-- 搜索中指示器 -->
               <v-progress-circular
@@ -113,13 +151,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { closeResultWindow } from './api'
 
 // 从 pywebview API 获取数据
 const capturedText = ref('')
 const papers = ref<any[]>([])
 const isPinned = ref(true)  // 默认置顶
+const downloadStates = ref<Record<string, { status: string; progress: number; path: string | null; error: string | null }>>({})
+
+// 排序：有 DOI/URL 的在前，既无 DOI 也无 URL 的（失败文献）在底部
+const sortedPapers = computed(() => {
+  const arr = [...papers.value]
+  arr.sort((a, b) => {
+    const aFailed = !a._placeholder && !a._error && !a.doi && !a.url
+    const bFailed = !b._placeholder && !b._error && !b.doi && !b.url
+    if (aFailed && !bFailed) return 1
+    if (!aFailed && bFailed) return -1
+    return 0
+  })
+  return arr
+})
 
 // 窗口拖动
 // 上次获取的版本号，用于检测更新
@@ -132,6 +184,7 @@ onMounted(async () => {
   // 轮询版本号，有更新时自动刷新（纯 pywebview JS API，无 evaluate_js）
   const pollInterval = setInterval(async () => {
     await fetchAndApplyResult()
+    await pollDownloadProgress()
   }, 500)
 
   // 组件卸载时清除轮询
@@ -164,13 +217,49 @@ function applyResult(data: any) {
   }
 }
 
+async function pollDownloadProgress() {
+  const api = (window as any).pywebview?.api
+  if (!api?.getDownloadProgress) return
+  // 检查所有有 DOI 的文献的下载状态（包括自动下载触发的）
+  for (const paper of papers.value) {
+    if (!paper.doi) continue
+    try {
+      const json = await api.getDownloadProgress(paper.doi)
+      if (json) {
+        const updated = JSON.parse(json)
+        if (updated.status !== 'unknown') {
+          downloadStates.value[paper.doi] = updated
+        }
+      }
+    } catch { /* ignore */ }
+  }
+}
+
 function getCcfColor(rank: string): string {
   const colors: Record<string, string> = { 'A': 'red', 'B': 'blue', 'C': 'green' }
   return colors[rank] || 'grey'
 }
 
-function onDownload(paper: any) {
-  console.log('下载论文:', paper.title)
+async function onDownload(paper: any) {
+  if (!paper.doi) return
+  const api = (window as any).pywebview?.api
+  if (!api?.downloadByDoi) return
+  api.downloadByDoi(paper.doi)
+  downloadStates.value[paper.doi] = { status: 'downloading', progress: 0, path: null, error: null }
+}
+
+function onOpenPdf(doi: string) {
+  const state = downloadStates.value[doi]
+  if (state?.path) {
+    ;(window as any).pywebview?.api?.openFile?.(state.path)
+  }
+}
+
+function onSearchTitle(paper: any) {
+  const query = paper.raw_citation || paper.title
+  if (query) {
+    ;(window as any).pywebview?.api?.searchInBrowser?.(query)
+  }
 }
 
 function onOpenUrl(paper: any) {
@@ -224,6 +313,16 @@ async function togglePin() {
 </script>
 
 <style scoped>
+.download-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.download-progress {
+  position: absolute;
+  pointer-events: none;
+}
 /* 整个应用容器隐藏溢出 */
 :deep(.v-application) {
   overflow: hidden;

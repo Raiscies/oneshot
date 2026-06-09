@@ -3,7 +3,7 @@
         "modifiers": [
             "ctrl"
         ],
-        "key": "q"
+        "key": "`"
     },
     "window": {
         "always_on_top": true,
@@ -11,5 +11,16 @@
     },
     "storage": {
         "path": ""
+    },
+    "cf_bypass": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "download": {
+        "auto_open_pdf": true,
+        "auto_download_count": 1
+    },
+    "search": {
+        "engine_url": "https://www.google.com/search?q={query}"
     }
 }
