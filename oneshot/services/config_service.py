@@ -25,14 +25,24 @@ DEFAULT_CONFIG = {
     },
     "cf_bypass": {
         "host": "127.0.0.1",
-        "port": 8000
+        "port": 8000,
+        "use_external": False
     },
     "download": {
         "auto_open_pdf": False,
-        "auto_download_count": 1
+        "auto_download_count": 1,
+        "naming_pattern": "{doi}.pdf",
+        "auto_open_doi_on_fail": True,
+        "delay_seconds": 5
     },
     "search": {
         "engine_url": "https://scholar.google.com/scholar?q={query}"
+    },
+    "status_bar": {
+        "enabled": False
+    },
+    "result": {
+        "auto_open": True
     }
 }
 
@@ -151,3 +161,13 @@ class ConfigService:
     def search(self) -> Dict[str, Any]:
         """获取搜索配置"""
         return self._config.get("search", DEFAULT_CONFIG["search"])
+
+    @property
+    def status_bar(self) -> Dict[str, Any]:
+        """获取状态浮窗配置"""
+        return self._config.get("status_bar", DEFAULT_CONFIG["status_bar"])
+
+    @property
+    def result(self) -> Dict[str, Any]:
+        """获取结果弹窗配置"""
+        return self._config.get("result", DEFAULT_CONFIG["result"])

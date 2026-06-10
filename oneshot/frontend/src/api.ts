@@ -15,18 +15,29 @@ declare global {
         toggleResultOnTop: () => Promise<boolean>
         setHotkey: (modifiers: string[], key: string) => void
         getHotkey: () => Promise<string>
-        setCfBypassConfig: (host: string, port: number) => void
+        setCfBypassConfig: (host: string, port: number, use_external?: boolean) => void
         getCfBypassConfig: () => Promise<string>
-        downloadByDoi: (doi: string) => void
+        downloadByDoi: (doi: string, meta_json?: string) => void
         getDownloadProgress: (doi: string) => Promise<string>
+        checkPaperExists: (doi: string) => Promise<string>
         openFile: (path: string) => void
         searchInBrowser: (query: string) => void
         setAutoOpenPdf: (enabled: boolean) => void
         getAutoOpenPdf: () => Promise<boolean>
         setAutoDownloadCount: (count: number) => void
         getAutoDownloadCount: () => Promise<number>
+        setNamingPattern: (pattern: string) => void
+        getNamingPattern: () => Promise<string>
+        setAutoOpenDoiOnFail: (enabled: boolean) => void
+        getAutoOpenDoiOnFail: () => Promise<boolean>
         setSearchUrl: (url: string) => void
         getSearchUrl: () => Promise<string>
+        getStatus: () => Promise<string>
+        showResultWindow: () => void
+        setStatusBarEnabled: (enabled: boolean) => void
+        getStatusBarEnabled: () => Promise<boolean>
+        setResultAutoOpen: (enabled: boolean) => void
+        getResultAutoOpen: () => Promise<boolean>
       }
     }
   }

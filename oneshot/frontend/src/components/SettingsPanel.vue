@@ -80,6 +80,29 @@
           </v-expansion-panel-text>
         </v-expansion-panel>
 
+        <!-- 显示设置 -->
+        <v-expansion-panel title="显示">
+          <v-expansion-panel-text>
+            <!--
+            <v-switch
+              v-model="statusBarEnabled"
+              label="显示状态浮窗"
+              color="primary"
+              hide-details
+              @update:model-value="(v) => onStatusBarEnabledChange(v ?? true)"
+            ></v-switch>
+            -->
+            <v-switch
+              v-model="resultAutoOpen"
+              label="触发快捷键时自动弹出结果窗口"
+              color="primary"
+              hide-details
+              class="mt-3"
+              @update:model-value="(v) => onResultAutoOpenChange(v ?? true)"
+            ></v-switch>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+
         <!-- 下载设置 -->
         <v-expansion-panel title="下载">
           <v-expansion-panel-text>
@@ -101,6 +124,36 @@
               class="mt-3"
               @update:model-value="onAutoDownloadCountChange"
             ></v-text-field>
+            <v-text-field
+              v-model="namingPattern"
+              label="PDF 命名格式（{doi}=DOI）"
+              variant="outlined"
+              density="compact"
+              hide-details
+              class="mt-3"
+              @update:model-value="onNamingPatternChange"
+            ></v-text-field>
+            <v-text-field
+              v-model.number="delaySeconds"
+              label="同出版商下载间隔（秒）"
+              type="number"
+              variant="outlined"
+              density="compact"
+              hide-details
+              min="0"
+              class="mt-3"
+              hint="重启生效"
+              persistent-hint
+            ></v-text-field>
+            <v-switch
+              v-model="autoOpenDoiOnFail"
+              label="下载失败后自动打开 DOI 链接"
+              color="primary"
+              hide-details
+              class="mt-3"
+              @update:model-value="(v) => onAutoOpenDoiOnFailChange(v ?? false)"
+            ></v-switch>
+            <p class="text-caption text-warning mt-3">请确保您的网络已经处于能够手动下载文献的环境下！</p>
           </v-expansion-panel-text>
         </v-expansion-panel>
 
@@ -122,6 +175,14 @@
         <!-- CloudflareBypass 设置 -->
         <v-expansion-panel title="Cloudflare 绕过">
           <v-expansion-panel-text>
+            <v-switch
+              v-model="cfBypassExternal"
+              label="使用外部 CF 代理（不自动启动内置服务器）"
+              color="primary"
+              hide-details
+              class="mb-3"
+            ></v-switch>
+
             <v-text-field
               v-model="cfBypassHost"
               label="代理服务器地址"
@@ -265,6 +326,7 @@ onMounted(async () => {
         const cfg = JSON.parse(json)
         if (cfg.host) cfBypassHost.value = cfg.host
         if (cfg.port) cfBypassPort.value = cfg.port
+        if (typeof cfg.use_external === 'boolean') cfBypassExternal.value = cfg.use_external
         cfBypassChanged.value = false
         break
       }
@@ -293,6 +355,28 @@ onMounted(async () => {
     } catch { /* API not ready yet */ }
     await new Promise(r => setTimeout(r, 200))
   }
+  // 加载命名格式
+  for (let retry = 0; retry < 20; retry++) {
+    try {
+      const val = await (window as any).pywebview?.api?.getNamingPattern?.()
+      if (typeof val === 'string' && val) {
+        namingPattern.value = val
+        break
+      }
+    } catch { /* API not ready yet */ }
+    await new Promise(r => setTimeout(r, 200))
+  }
+  // 加载下载失败打开 DOI 设置
+  for (let retry = 0; retry < 20; retry++) {
+    try {
+      const val = await (window as any).pywebview?.api?.getAutoOpenDoiOnFail?.()
+      if (typeof val === 'boolean') {
+        autoOpenDoiOnFail.value = val
+        break
+      }
+    } catch { /* API not ready yet */ }
+    await new Promise(r => setTimeout(r, 200))
+  }
   // 加载搜索引擎 URL
   for (let retry = 0; retry < 20; retry++) {
     try {
@@ -301,6 +385,17 @@ onMounted(async () => {
         searchEngineUrl.value = val
         break
       }
+    } catch { /* API not ready yet */ }
+    await new Promise(r => setTimeout(r, 200))
+  }
+  // 加载显示设置
+  for (let retry = 0; retry < 20; retry++) {
+    try {
+      const s = await (window as any).pywebview?.api?.getStatusBarEnabled?.()
+      if (typeof s === 'boolean') { statusBarEnabled.value = s; }
+      const r = await (window as any).pywebview?.api?.getResultAutoOpen?.()
+      if (typeof r === 'boolean') { resultAutoOpen.value = r; }
+      break
     } catch { /* API not ready yet */ }
     await new Promise(r => setTimeout(r, 200))
   }
@@ -317,11 +412,15 @@ const storagePath = ref('./papers')
 // CloudflareBypass 设置
 const cfBypassHost = ref('127.0.0.1')
 const cfBypassPort = ref(8000)
+const cfBypassExternal = ref(false)
 const cfBypassChanged = ref(false)
 
 // 下载设置
 const autoOpenPdf = ref(false)
 const autoDownloadCount = ref(0)
+const namingPattern = ref('{doi}.pdf')
+const autoOpenDoiOnFail = ref(false)
+const delaySeconds = ref(5)
 
 // 搜索设置
 const searchEngineUrl = ref('https://scholar.google.com/scholar?q={query}')
@@ -332,6 +431,10 @@ const searchEnginePresets = [
   'https://www.bing.com/search?q={query}',
   'https://arxiv.org/search/?query={query}&searchtype=all',
 ]
+
+// 显示设置
+const statusBarEnabled = ref(true)
+const resultAutoOpen = ref(true)
 
 // 事件处理
 function applyHotkey() {
@@ -351,12 +454,11 @@ function onFollowMouseChange(value: boolean) {
 }
 
 function openFolder() {
-  // TODO: 调用 Python 后端打开文件夹
-  console.log('打开目录:', storagePath.value)
+  ;(window as any).pywebview?.api?.openFile?.(storagePath.value)
 }
 
 // CF bypass 配置变更检测
-watch([cfBypassHost, cfBypassPort], () => {
+watch([cfBypassHost, cfBypassPort, cfBypassExternal], () => {
   cfBypassChanged.value = true
 })
 
@@ -364,7 +466,7 @@ async function applyCfBypass() {
   const api = (window as any).pywebview?.api
   if (!api?.setCfBypassConfig) return
   try {
-    await api.setCfBypassConfig(cfBypassHost.value, cfBypassPort.value)
+    await api.setCfBypassConfig(cfBypassHost.value, cfBypassPort.value, cfBypassExternal.value)
     cfBypassChanged.value = false
   } catch (e) {
     console.error('应用 CF bypass 配置失败:', e)
@@ -380,8 +482,24 @@ function onAutoDownloadCountChange(value: string | number) {
   ;(window as any).pywebview?.api?.setAutoDownloadCount?.(num || 0)
 }
 
+function onNamingPatternChange(value: string) {
+  ;(window as any).pywebview?.api?.setNamingPattern?.(value)
+}
+
+function onAutoOpenDoiOnFailChange(value: boolean) {
+  ;(window as any).pywebview?.api?.setAutoOpenDoiOnFail?.(value)
+}
+
 function onSearchUrlChange(value: string) {
   ;(window as any).pywebview?.api?.setSearchUrl?.(value)
+}
+
+function onStatusBarEnabledChange(value: boolean) {
+  ;(window as any).pywebview?.api?.setStatusBarEnabled?.(value)
+}
+
+function onResultAutoOpenChange(value: boolean) {
+  ;(window as any).pywebview?.api?.setResultAutoOpen?.(value)
 }
 </script>
 

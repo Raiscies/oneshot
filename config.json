@@ -14,13 +14,23 @@
     },
     "cf_bypass": {
         "host": "127.0.0.1",
-        "port": 8000
+        "port": 8000,
+        "use_external": false
     },
     "download": {
         "auto_open_pdf": true,
-        "auto_download_count": 1
+        "auto_download_count": 1,
+        "naming_pattern": "{doi}.pdf",
+        "auto_open_doi_on_fail": true,
+        "delay_seconds": 5
     },
     "search": {
         "engine_url": "https://www.google.com/search?q={query}"
+    },
+    "status_bar": {
+        "enabled": false
+    },
+    "result": {
+        "auto_open": true
     }
 }

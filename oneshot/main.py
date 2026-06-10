@@ -76,15 +76,26 @@ class Api:
         self._on_hotkey_change = None  # (modifiers: list, key: str) -> None
         self._hotkey_state = {"modifiers": ["ctrl"], "key": "q"}  # 缓存当前快捷键
         self._on_cf_bypass_save = None  # (host: str, port: int) -> None
-        self._cf_bypass_state = {"host": "127.0.0.1", "port": 8000}  # 缓存 CF bypass 配置
+        self._cf_bypass_state = {"host": "127.0.0.1", "port": 8000, "use_external": False}  # 缓存 CF bypass 配置
         self._on_start_download = None  # (doi: str) -> None
         self._download_states: dict[str, dict] = {}  # doi → {status, progress, path, error}
         self._on_auto_open_change = None  # (enabled: bool) -> None
         self._auto_open_pdf = False
         self._on_auto_download_change = None  # (count: int) -> None
         self._auto_download_count = 0
+        self._on_naming_change = None  # (pattern: str) -> None
+        self._naming_pattern = "{doi}.pdf"
+        self._on_doi_fail_change = None  # (enabled: bool) -> None
+        self._auto_open_doi_on_fail = False
         self._on_search_url_change = None  # (url: str) -> None
         self._search_engine_url = "https://scholar.google.com/scholar?q={query}"
+        self._status_state = {"text": "", "progress": 0.0}
+        self._on_show_result = None  # () -> None
+        self._on_status_change = None  # (enabled: bool) -> None
+        self._status_bar_enabled = True
+        self._on_result_auto_change = None  # (enabled: bool) -> None
+        self._result_auto_open = True
+        self._on_check_exists = None  # (doi: str) -> Path | None
     
     def setResult(self, data: str):
         """设置搜索结果，递增版本号通知前端"""
@@ -178,28 +189,41 @@ class Api:
         """前端获取当前快捷键配置"""
         return json.dumps(self._hotkey_state)
 
-    def setCfBypassConfig(self, host: str, port: int):
+    def setCfBypassConfig(self, host: str, port: int, use_external: bool = False):
         """前端更新 CloudflareBypass 配置（需手动重启生效）"""
         if self._on_cf_bypass_save:
-            self._on_cf_bypass_save(host, port)
+            self._on_cf_bypass_save(host, port, use_external)
 
     def getCfBypassConfig(self) -> str:
         """前端获取当前 CloudflareBypass 配置"""
         return json.dumps(self._cf_bypass_state)
 
-    def downloadByDoi(self, doi: str):
+    def downloadByDoi(self, doi: str, meta_json: str = "{}"):
         """前端触发 DOI 下载（异步，通过 getDownloadProgress 轮询进度）"""
         if self._on_start_download:
-            self._on_start_download(doi)
+            try:
+                meta = json.loads(meta_json)
+            except Exception:
+                meta = {}
+            self._on_start_download(doi, meta)
 
     def getDownloadProgress(self, doi: str) -> str:
         """前端轮询下载进度"""
         state = self._download_states.get(doi, {"status": "unknown", "progress": 0, "path": None, "error": None})
         return json.dumps(state)
 
+    def checkPaperExists(self, doi: str) -> str:
+        """检查文献 PDF 是否已存在"""
+        if self._on_check_exists:
+            path = self._on_check_exists(doi)
+            if path:
+                return json.dumps({"exists": True, "path": str(path)})
+        return json.dumps({"exists": False})
+
     def openFile(self, path: str):
         """用系统默认程序打开文件"""
         import os
+        path = os.path.abspath(path)
         os.startfile(path)
 
     def searchInBrowser(self, query: str):
@@ -218,6 +242,31 @@ class Api:
     def getSearchUrl(self) -> str:
         """前端获取搜索引擎 URL"""
         return self._search_engine_url
+
+    def getStatus(self) -> str:
+        """前端轮询状态浮窗内容"""
+        return json.dumps(self._status_state)
+
+    def showResultWindow(self):
+        """前端点击浮窗后打开结果弹窗"""
+        if self._on_show_result:
+            self._on_show_result()
+
+    def setStatusBarEnabled(self, enabled: bool):
+        self._status_bar_enabled = enabled
+        if self._on_status_change:
+            self._on_status_change(enabled)
+
+    def getStatusBarEnabled(self) -> bool:
+        return self._status_bar_enabled
+
+    def setResultAutoOpen(self, enabled: bool):
+        self._result_auto_open = enabled
+        if self._on_result_auto_change:
+            self._on_result_auto_change(enabled)
+
+    def getResultAutoOpen(self) -> bool:
+        return self._result_auto_open
 
     def setAutoOpenPdf(self, enabled: bool):
         """前端更新下载后自动打开 PDF 设置"""
@@ -239,6 +288,21 @@ class Api:
         """前端获取自动下载阈值"""
         return self._auto_download_count
 
+    def setNamingPattern(self, pattern: str):
+        if self._on_naming_change:
+            self._on_naming_change(pattern)
+
+    def getNamingPattern(self) -> str:
+        return self._naming_pattern
+
+    def setAutoOpenDoiOnFail(self, enabled: bool):
+        self._auto_open_doi_on_fail = enabled
+        if self._on_doi_fail_change:
+            self._on_doi_fail_change(enabled)
+
+    def getAutoOpenDoiOnFail(self) -> bool:
+        return self._auto_open_doi_on_fail
+
 
 class OneShotApp:
     """OneShot 应用主类"""
@@ -254,7 +318,12 @@ class OneShotApp:
         self._js_api._on_start_download = self._start_download_by_doi
         self._js_api._on_auto_open_change = self._save_auto_open_pdf
         self._js_api._on_auto_download_change = self._save_auto_download_count
+        self._js_api._on_naming_change = self._save_naming_pattern
+        self._js_api._on_doi_fail_change = self._save_auto_open_doi_on_fail
         self._js_api._on_search_url_change = self._save_search_url
+        self._js_api._on_show_result = self._show_result_window
+        self._js_api._on_status_change = self._save_status_bar_enabled
+        self._js_api._on_result_auto_change = self._save_result_auto_open
         
         # 根据 debug 模式调整全局日志级别
         if debug_mode:
@@ -284,6 +353,7 @@ class OneShotApp:
         self._current_executor = None  # 当前搜索的线程池，新搜索时取消旧任务
         self._search_id = 0  # 搜索 ID，防止旧搜索的过期更新
         self._download_service: Optional[DownloadService] = None
+        self._status_window = None
     
     def _init_services(self):
         """初始化所有服务"""
@@ -307,14 +377,27 @@ class OneShotApp:
             storage_dir=storage_path,
             cf_host=cf_config.get("host", "127.0.0.1"),
             cf_port=cf_config.get("port", 8000),
+            cf_external=cf_config.get("use_external", False),
+            naming_pattern=download_config.get("naming_pattern", "{doi}.pdf"),
+            delay_seconds=download_config.get("delay_seconds", 5),
         )
         self._js_api._cf_bypass_state = {
             "host": cf_config.get("host", "127.0.0.1"),
             "port": cf_config.get("port", 8000),
+            "use_external": cf_config.get("use_external", False),
         }
         self._js_api._auto_open_pdf = download_config.get("auto_open_pdf", False)
         self._js_api._auto_download_count = download_config.get("auto_download_count", 0)
+        self._js_api._naming_pattern = download_config.get("naming_pattern", "{doi}.pdf")
+        self._js_api._on_check_exists = self._download_service.check_file_exists
+        self._js_api._auto_open_doi_on_fail = download_config.get("auto_open_doi_on_fail", False)
         self._js_api._search_engine_url = self._config_service.search.get("engine_url", "https://scholar.google.com/scholar?q={query}")
+        self._js_api._status_bar_enabled = self._config_service.status_bar.get("enabled", True)
+        self._js_api._result_auto_open = self._config_service.result.get("auto_open", True)
+
+        # 创建状态浮窗
+        if self._js_api._status_bar_enabled:
+            self._create_status_window()
     
     def _get_hotkey_info(self):
         """获取快捷键信息"""
@@ -362,7 +445,8 @@ class OneShotApp:
             
             logger.info(f"搜索 #{my_id}: 分割出 {len(segments)} 个引用")
             self._tray_service.notify("OneShot", f"正在解析 {len(segments)} 篇文献...")
-            
+            self._update_status(f"正在解析 {len(segments)} 篇文献...", 0.0)
+
             # 1. 立即设置初始结果（仅捕获文本 + 占位卡片）
             placeholders = [{"_placeholder": True, "_index": i} for i in range(len(segments))]
             initial_data = {
@@ -371,9 +455,8 @@ class OneShotApp:
                 "message": f"正在解析 {len(segments)} 篇文献...",
             }
             self._js_api.setResult(json.dumps(initial_data))
-            self._create_result_window()
-            
-            # 2. 并行解析每个分段
+            if self._js_api._result_auto_open:
+                self._create_result_window()
             def parse_segment(idx: int, segment: tuple): # idx: internal index
                 """解析单个分段，分两阶段推送"""
                 # 检查是否已被取消
@@ -446,6 +529,7 @@ class OneShotApp:
             
             logger.info(f"搜索 #{my_id} 完成: {parsed_count}/{len(segments)} 篇")
             self._tray_service.notify("OneShot", f"找到 {parsed_count} 篇文献")
+            self._update_status(f"找到 {parsed_count} 篇文献", 1.0)
 
             # 自动下载（仅计入有 DOI 的文献）
             threshold = self._js_api._auto_download_count
@@ -453,7 +537,12 @@ class OneShotApp:
                 for p in final_papers:
                     if not p.get("_placeholder") and not p.get("_error") and p.get("doi"):
                         logger.info(f"自动下载: {p['doi']}")
-                        self._start_download_by_doi(p["doi"])
+                        meta = {
+                            "title": p.get("title", ""),
+                            "authors": p.get("authors", []),
+                            "pubdate": p.get("year", ""),
+                        }
+                        self._start_download_by_doi(p["doi"], meta)
 
         except Exception as e:
             if self._search_id == my_id:
@@ -499,6 +588,42 @@ class OneShotApp:
         
         thread = threading.Thread(target=create_window_thread, daemon=True)
         thread.start()
+
+    def _create_status_window(self):
+        """创建状态浮窗（全局唯一，圆角小条，总是置顶）"""
+        if self._status_window:
+            try:
+                self._status_window.show()
+            except Exception:
+                pass
+            return
+
+        def _create():
+            try:
+                frontend_url = _get_frontend_url()
+                status_url = None
+                if os.path.isabs(frontend_url):
+                    status_url = str(FRONTEND_DIST_DIR / 'status.html')
+                else:
+                    status_url = frontend_url.replace('index.html', 'status.html')
+
+                self._status_window = webview.create_window( 
+                    title='OneShot Status',
+                    url=status_url,
+                    width=200,
+                    height=32,
+                    frameless=True,
+                    on_top=True,
+                    transparent=True,
+                    resizable=False,
+                    easy_drag=True,
+                    js_api=self._js_api,
+                )
+                logger.info("状态浮窗已创建")
+            except Exception as e:
+                logger.error(f"创建状态浮窗失败: {e}")
+
+        threading.Thread(target=_create, daemon=True).start()
     
     def _setup_hotkey(self):
         """设置快捷键"""
@@ -530,26 +655,72 @@ class OneShotApp:
         self._config_service.download["auto_download_count"] = count
         self._config_service.save()
 
+    def _save_naming_pattern(self, pattern: str):
+        """保存命名格式"""
+        logger.info(f"命名格式: {pattern}")
+        self._config_service.download["naming_pattern"] = pattern
+        self._config_service.save()
+        self._js_api._naming_pattern = pattern
+
+    def _save_auto_open_doi_on_fail(self, enabled: bool):
+        """保存下载失败自动打开 DOI"""
+        self._config_service.download["auto_open_doi_on_fail"] = enabled
+        self._config_service.save()
+
     def _save_search_url(self, url: str):
         """保存搜索引擎 URL"""
         logger.info(f"搜索引擎 URL 已更新")
         self._config_service.search["engine_url"] = url
         self._config_service.save()
 
-    def _save_cf_bypass_config(self, host: str, port: int):
+    def _save_status_bar_enabled(self, enabled: bool):
+        """保存状态浮窗开关"""
+        self._config_service.status_bar["enabled"] = enabled
+        self._config_service.save()
+        if enabled:
+            self._create_status_window()
+        elif self._status_window:
+            try:
+                self._status_window.hide()
+            except Exception:
+                pass
+
+    def _save_result_auto_open(self, enabled: bool):
+        """保存结果弹窗自动打开开关"""
+        self._config_service.result["auto_open"] = enabled
+        self._config_service.save()
+
+    def _update_status(self, text: str, progress: float = 0.0):
+        """更新状态浮窗内容"""
+        self._js_api._status_state = {"text": text, "progress": progress}
+
+    def _show_result_window(self):
+        """显示结果弹窗（由浮窗点击触发）"""
+        self._create_result_window()
+
+    def _save_cf_bypass_config(self, host: str, port: int, use_external: bool = False):
         """保存 CloudflareBypass 配置（需重启软件生效）"""
-        logger.info(f"CloudflareBypass 配置已保存: {host}:{port}（重启生效）")
+        logger.info(f"CloudflareBypass 配置已保存: {host}:{port} external={use_external}（重启生效）")
         self._config_service.cf_bypass["host"] = host
         self._config_service.cf_bypass["port"] = port
+        self._config_service.cf_bypass["use_external"] = use_external
         self._config_service.save()
-        self._js_api._cf_bypass_state = {"host": host, "port": port}
+        self._js_api._cf_bypass_state = {"host": host, "port": port, "use_external": use_external}
 
-    def _start_download_by_doi(self, doi: str):
+    def _start_download_by_doi(self, doi: str, meta: dict = None):
         """在后台线程中启动 DOI 下载"""
         states = self._js_api._download_states
         if states.get(doi, {}).get("status") == "downloading":
             return  # 已在下载中
         states[doi] = {"status": "downloading", "progress": 0.0, "path": None, "error": None}
+        self._update_status(f"正在下载...", 0.0)
+
+        # 如果文件已存在，立即返回 done
+        existing = self._download_service.check_file_exists(doi)
+        if existing:
+            states[doi] = {"status": "done", "progress": 1.0, "path": str(existing), "error": None}
+            self._update_status("下载完成", 1.0)
+            return
 
         def _run():
             states = self._js_api._download_states
@@ -561,19 +732,26 @@ class OneShotApp:
             asyncio.set_event_loop(loop)
             try:
                 path = loop.run_until_complete(self._download_service.download_by_doi(
-                    doi, progress_callback=progress_cb
+                    doi, progress_callback=progress_cb, meta=meta
                 ))
                 if path:
                     states[doi] = {"status": "done", "progress": 1.0, "path": str(path), "error": None}
                     logger.info(f"下载完成: {path}")
+                    self._update_status("下载完成", 1.0)
                     if self._js_api._auto_open_pdf:
                         import os
                         os.startfile(str(path))
                 else:
                     states[doi] = {"status": "unsupported", "progress": 0, "path": None, "error": "暂不支持该出版商"}
+                    if self._js_api._auto_open_doi_on_fail:
+                        import webbrowser
+                        webbrowser.open(f"https://doi.org/{doi}")
             except Exception as e:
                 logger.error(f"下载失败: {e}")
                 states[doi] = {"status": "error", "progress": 0, "path": None, "error": str(e)}
+                if self._js_api._auto_open_doi_on_fail:
+                    import webbrowser
+                    webbrowser.open(f"https://doi.org/{doi}")
             finally:
                 loop.close()
 
@@ -744,6 +922,13 @@ class OneShotApp:
                 logger.info("下载服务已停止")
             except Exception as e:
                 logger.error(f"停止下载服务失败: {e}")
+
+        # 7. 关闭状态浮窗
+        if self._status_window:
+            try:
+                self._status_window.destroy()
+            except Exception:
+                pass
 
         logger.info("程序已退出")
     

@@ -71,7 +71,7 @@
                 <v-progress-circular
                   v-if="downloadStates[paper.doi]?.status === 'downloading'"
                   :model-value="(downloadStates[paper.doi]?.progress ?? 0) * 100"
-                  :indeterminate="downloadStates[paper.doi]?.progress === undefined"
+                  :indeterminate="(downloadStates[paper.doi]?.progress ?? 0) <= 0"
                   size="26"
                   width="3"
                   color="success"
@@ -214,6 +214,27 @@ function applyResult(data: any) {
     papers.value = data.papers
     capturedText.value = data.captured_text || ''
     console.info('结果已加载:', data.papers.length, '篇')
+    // 检查每篇文献是否已下载
+    checkExistingFiles()
+  }
+}
+
+async function checkExistingFiles() {
+  const api = (window as any).pywebview?.api
+  if (!api?.checkPaperExists) return
+  for (const paper of papers.value) {
+    if (!paper.doi) continue
+    try {
+      const json = await api.checkPaperExists(paper.doi)
+      if (json) {
+        const result = JSON.parse(json)
+        if (result.exists) {
+          downloadStates.value[paper.doi] = {
+            status: 'done', progress: 1.0, path: result.path, error: null
+          }
+        }
+      }
+    } catch { /* ignore */ }
   }
 }
 
@@ -244,7 +265,8 @@ async function onDownload(paper: any) {
   if (!paper.doi) return
   const api = (window as any).pywebview?.api
   if (!api?.downloadByDoi) return
-  api.downloadByDoi(paper.doi)
+  const meta = { title: paper.title, authors: paper.authors, pubdate: paper.year }
+  api.downloadByDoi(paper.doi, JSON.stringify(meta))
   downloadStates.value[paper.doi] = { status: 'downloading', progress: 0, path: null, error: null }
 }
 

@@ -58,9 +58,10 @@ class CloudflareBypassProxy:
         await proxy.stop()
     """
 
-    def __init__(self, host: str = CF_BYPASS_HOST, port: int = CF_BYPASS_PORT):
+    def __init__(self, host: str = CF_BYPASS_HOST, port: int = CF_BYPASS_PORT, external: bool = False):
         self._host = host
         self._port = port
+        self._external = external
         self._base_url = f"http://localhost:{port}"
         self._server: Optional[uvicorn.Server] = None
         self._thread: Optional[threading.Thread] = None
@@ -69,11 +70,17 @@ class CloudflareBypassProxy:
 
     async def start(self):
         """启动 CloudflareBypass 服务器并等待就绪"""
+        if self._external:
+            logger.info("使用外部 CloudflareBypass 代理，跳过内置服务器启动")
+            await self._wait_ready()
+            return
         self._start_server()
         await self._wait_ready()
 
     async def stop(self):
         """停止 CloudflareBypass 服务器"""
+        if self._external:
+            return
         self._stop_server()
 
     # ── 下载接口 ──────────────────────────────────────────

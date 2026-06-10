@@ -20,6 +20,14 @@ def register_all(service: "DownloadService"):
     """向 DownloadService 注册所有内置的出版商处理器"""
     from .acm import acm_handler
     from .ieee import ieee_handler
+    from .dagstuhl import dagstuhl_handler
+    from .springer import springer_handler
+    from .nature import nature_handler
+    from .siam import siam_handler
 
     service.register_handler("dl.acm.org", acm_handler)
     service.register_handler("ieeexplore.ieee.org", ieee_handler)
+    service.register_handler("drops.dagstuhl.de", dagstuhl_handler)
+    service.register_handler("link.springer.com", springer_handler)
+    service.register_handler("www.nature.com", nature_handler)
+    service.register_handler("epubs.siam.org", siam_handler)
