@@ -31,3 +31,12 @@ async def dagstuhl_handler(
         filename=filename,
         progress_callback=progress_callback,
     )
+
+'''
+<a href="https://drops.dagstuhl.de/storage/00lipics/lipics-vol123-isaac2018/LIPIcs.ISAAC.2018.56/LIPIcs.ISAAC.2018.56.pdf" title="View as PDF">
+<span class="badge" style="background-color: #444; width: 300px; transform: translateY(-2px); font-size: unset;">
+<i class="bi bi-file-earmark-pdf-fill" style="color:red; background-color: #fff; border-radius: 2px; padding-top: 1px"></i> PDF
+</span>
+<div class="mt-2">LIPIcs.ISAAC.2018.56.pdf</div>
+</a>
+'''

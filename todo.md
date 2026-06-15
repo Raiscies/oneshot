@@ -10,14 +10,32 @@
 | Dagstuhl | `drops.dagstuhl.de` | ❌ | scrape page html for pdf link | ✅ |
 | Nature | `www.nature.com` | ❌ | `/articles/{id}.pdf` | ✅ |
 | SIAM | `epubs.siam.org` | ✅ | CF proxy `/doi/pdf/{doi}?download=true` | ✅ |
+| APS | `journals.aps.org` | ✅ | CF proxy, replace /abstract/→/pdf/ | ✅ |
 | Sage | `journals.sagepub.com` | ✅ | tokenized, needs headless | ❌ |
 | IOP | `iopscience.iop.org` | ✅ | reCAPTCHA → auto_open_doi | ❌ |
 ### 测试用 DOI / 链接
 
 - **Springer**: `10.1007/978-3-540-68552-4_24` ✅
+    -> `https://link.springer.com/chapter/10.1007/978-3-540-68552-4_24`
+    -> `https://link.springer.com/content/pdf/10.1007/978-3-540-68552-4.pdf`
 - **Dagstuhl**: `10.4230/LIPIcs.CPM.2021.15` ✅
 - **Nature**: `10.1038/s41467-018-04978-z` ✅
 - **SIAM**: `10.1137/0136016` ✅
+    -> `https://epubs.siam.org/doi/10.1137/0136016`
+    -> `https://epubs.siam.org/doi/epdf/10.1137/0136016`
+    -> `https://epubs.siam.org/doi/pdf/10.1137/0136016?download=true`
+- **arXiv**: `https://doi.org/10.48550/arXiv.2207.03579` ✅
+    -> `https://arxiv.org/abs/2207.03579`
+    -> `https://arxiv.org/pdf/2207.03579`
+
+- **journals.aps.org/**: `https://doi.org/10.1103/PHYSREVE.76.056709` ✅
+    <!-- Wrong? -->
+    <!-- -> `https://link.aps.org/doi/10.1103/PhysRevE.76.056709` -->
+    -> `https://journals.aps.org/pre/abstract/10.1103/PhysRevE.76.056709`
+    -> `https://journals.aps.org/pre/pdf/10.1103/PhysRevE.76.056709`
+
+- **elsevier**: `https://doi.org/10.1016/J.PHYSA.2014.05.073`
+    -> `https://www.sciencedirect.com/science/article/abs/pii/S037843711400466X?via%3Dihub`
 
 **Difficult:**
 

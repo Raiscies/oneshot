@@ -24,6 +24,8 @@ def register_all(service: "DownloadService"):
     from .springer import springer_handler
     from .nature import nature_handler
     from .siam import siam_handler
+    from .arxiv import arxiv_handler
+    from .aps import aps_handler
 
     service.register_handler("dl.acm.org", acm_handler)
     service.register_handler("ieeexplore.ieee.org", ieee_handler)
@@ -31,3 +33,5 @@ def register_all(service: "DownloadService"):
     service.register_handler("link.springer.com", springer_handler)
     service.register_handler("www.nature.com", nature_handler)
     service.register_handler("epubs.siam.org", siam_handler)
+    service.register_handler("arxiv.org", arxiv_handler)
+    service.register_handler("journals.aps.org", aps_handler)
